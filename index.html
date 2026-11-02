@@ -62,7 +62,7 @@ function open(m,i){
   srcIdx=+(LS['src_'+m.id]||0); if(srcIdx>=srcList.length) srcIdx=0;
   $('#list').style.display='none'; $('#view').style.display='block'; $('#msg').textContent='';
   $('#alt').style.display=(m.caedrel.length&&m.official.length)?'':'none';
-  load(); history.pushState({}, '', '#'+m.id)}
+  load(); if(location.hash!=='#'+m.id)history.pushState({}, '', '#'+m.id)}
 function load(){
   const [kind,vid]=srcList[srcIdx]; const m=cur;
   $('#info').textContent=`${m.teams.join(' vs ')} · ${m.stage} · Source: ${kind}${srcList.length>1?'':''}`;
@@ -94,5 +94,5 @@ $('#showAll').onchange=render;
 document.addEventListener('keydown',e=>{if($('#view').style.display!=='block'||e.target.tagName==='INPUT')return;
   if(e.key===' '){e.preventDefault();$('#pp').click()} if(e.key==='ArrowLeft')document.querySelector('[data-s="-10"]').click(); if(e.key==='ArrowRight')document.querySelector('[data-s="10"]').click()});
 window.onYouTubeIframeAPIReady=()=>{};
-fetch('data/matches.json?'+Date.now()).then(r=>r.json()).then(d=>{D=d;render()});
+fetch('data/matches.json?'+Date.now()).then(r=>r.json()).then(d=>{D=d;render();const h=location.hash.slice(1),i=D.matches.findIndex(m=>m.id===h);if(i>=0){const go=()=>window.YT&&YT.Player?open(D.matches[i],i):setTimeout(go,200);go()}});
 </script><script src="https://www.youtube.com/iframe_api"></script></body></html>
