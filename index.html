@@ -28,7 +28,7 @@ button:disabled{opacity:.4}
 <div id="view">
  <button id="back">← Matches</button>
  <div id="info"></div>
- <div id="wrap"><div id="yt"></div><div id="tw" style="position:absolute;inset:0;display:none"></div><div id="shield"></div><div id="cover">Tap ▶ to start</div></div>
+ <div id="wrap"><div id="yt"></div><div id="tw" style="position:absolute;left:0;right:0;top:-70px;height:calc(100% + 140px);display:none"></div><div id="shield"></div><div id="cover">Tap ▶ to start</div></div>
  <div id="ctl">
   <button id="pp">▶</button><span id="time">0:00</span>
   <button data-s="-60">−1m</button><button data-s="-10">−10s</button><button data-s="10">+10s</button><button data-s="60">+1m</button><button data-s="300">+5m</button>
@@ -71,13 +71,13 @@ function srcs(m){const o=[];
   if((m.twitch||[]).length)o.push(m.twitch.map(x=>['Caedrel (full Twitch stream)',x.v,'tw',x.t]));
   if(m.caedrel.length)o.push(m.caedrel.map(v=>['Caedrel co-stream (YouTube)',v,'yt',0]));
   if(m.official.length)o.push(m.official.map(v=>['Official broadcast',v,'yt',0]));return o}
-let TP=null, A=null; // A = active adapter
+let TP=null, A=null, twPlaying=false, twUserPause=false, twPending=null, twLoaded=null; // A = active adapter
 const YA={play:()=>P.playVideo(),pause:()=>P.pauseVideo(),seek:s=>P.seekTo(s,true),time:()=>P.getCurrentTime(),dur:()=>P.getDuration(),playing:()=>P.getPlayerState()===1,vol:v=>P.setVolume(v),rate:r=>P.setPlaybackRate(r)};
-const TA={play:()=>TP.play(),pause:()=>TP.pause(),seek:s=>TP.seek(s),time:()=>TP.getCurrentTime(),dur:()=>TP.getDuration(),playing:()=>!TP.isPaused(),vol:v=>TP.setVolume(v/100),rate:()=>{$('#msg').textContent='Speed not supported on Twitch'}};
+const TA={play:()=>TP.play(),pause:()=>{twUserPause=true;TP.pause()},seek:s=>TP.seek(s),time:()=>TP.getCurrentTime(),dur:()=>TP.getDuration(),playing:()=>twPlaying,vol:v=>TP.setVolume(v/100),rate:()=>{$('#msg').textContent='Speed not supported on Twitch'}};
 function load(){
   const [kind,vid,typ,t0]=srcList[srcIdx]; const m=cur;
   if(typ==='tw') return loadTw(vid,t0);
-  $('#tw').style.display='none'; $('#yt').style.display=''; if(TP&&A===TA)TP.pause(); A=YA;
+  $('#tw').style.display='none'; $('#yt').style.display=''; $('#shield').style.display=''; if(TP){TP.pause();TP=null;twLoaded=null;$('#tw').innerHTML='';twPlaying=false} A=YA;
   $('#info').textContent=`${m.teams.join(' vs ')} · ${m.stage} · Source: ${kind}${srcList.length>1?'':''}`;
   cover('Tap ▶ to start'); const start=Math.floor(+LS['p_'+vid]||0);
   if(!P){P=new YT.Player('yt',{videoId:vid,playerVars:{controls:0,disablekb:1,fs:0,rel:0,iv_load_policy:3,modestbranding:1,playsinline:1,start},
@@ -93,20 +93,30 @@ function loadTw(vid,t0){
   const yi=document.getElementById('yt'); if(yi)yi.style.display='none';
   $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (full Twitch stream)`;
   cover('Tap ▶ to start'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0);
-  const go=()=>{ if(!TP){TP=new Twitch.Player('tw',{video:'v'+vid,time:start+'s',parent:[location.hostname],autoplay:false,width:'100%',height:'100%'});
-      TP.addEventListener(Twitch.Player.READY,()=>{TP.setVolume(+$('#vol').value/100)});
-      TP.addEventListener(Twitch.Player.PLAY,()=>{if(A===TA){$('#cover').style.display='none';$('#pp').textContent='❚❚'}});
-      TP.addEventListener(Twitch.Player.PAUSE,()=>{if(A===TA){$('#pp').textContent='▶';cover('Paused')}});
-      TP.addEventListener(Twitch.Player.ENDED,()=>{if(A===TA)ended()});}
-    else {TP.setVideo('v'+vid,start);TP.pause()} };
+  twPending=[vid,start];
+  const go=()=>{ if(!TP){ return }  // created on first ▶ click, while visible (Twitch blocks play if hidden at creation)
+
+  };
   window.Twitch&&Twitch.Player?go():setTimeout(()=>loadTw(vid,t0),200);
   clearInterval(tick); tick=setInterval(()=>{ if(!TP||A!==TA)return; const t=TP.getCurrentTime(); $('#time').textContent=fmt(t);
-    if(t>2) LS['p_tw'+vid+'_'+cur.id]=t },500)}
+    if(t>2) LS['p_tw'+twPending[0]+'_'+cur.id]=t },500)}
+function makeTw(){const [vid,start]=twPending;
+  if(TP){TP.setVideo('v'+vid,start);TP.play();return}
+  TP=new Twitch.Player('tw',{video:'v'+vid,time:start+'s',parent:[location.hostname],autoplay:true,width:'100%',height:'100%'});
+      TP.addEventListener(Twitch.Player.READY,()=>{TP.setVolume(+$('#vol').value/100);TP.play()});
+      TP.addEventListener(Twitch.Player.PLAY,()=>{twPlaying=true;if(TP.getMuted())TP.setMuted(false);if(A===TA){$('#cover').style.display='none';$('#pp').textContent='❚❚'}});
+      TP.addEventListener(Twitch.Player.PAUSE,()=>{twPlaying=false;if(A===TA&&!twUserPause&&!TP.getMuted()){TP.setMuted(true);TP.play();$('#msg').innerHTML='Browser blocked sound — <button onclick="TP.setMuted(false);this.parentNode.textContent=\'\'">🔊 Unmute</button>';return}
+      if(A===TA){$('#pp').textContent='▶';cover('Paused')}});
+      TP.addEventListener(Twitch.Player.ENDED,()=>{twPlaying=false;if(A===TA)ended()});}
 function ended(){cover('End of this video. Use “Next part / game” or go back.');LS['w_'+cur.id]='1'}
 function cover(t){$('#cover').style.display='flex';$('#cover').textContent=t}
-function st(e){ if(e.data===1){$('#cover').style.display='none';$('#pp').textContent='❚❚'}
+function st(e){ if(A!==YA)return; if(e.data===1){$('#cover').style.display='none';$('#pp').textContent='❚❚'}
   else{ $('#pp').textContent='▶'; if(e.data===2) cover('Paused'); if(e.data===0){ended()} } }
-$('#pp').onclick=$('#cover').onclick=()=>{ if(!A||(A===YA&&!ready))return; A.playing()?A.pause():A.play()};
+$('#pp').onclick=$('#cover').onclick=()=>{ if(!A||(A===YA&&!ready))return;
+  if(A===TA){ if(A.playing()){A.pause();return}  // Twitch refuses to play while covered: uncover first
+    twUserPause=false; $('#cover').style.display='none'; $('#shield').style.display='none'; const k=twPending.join(); if(twLoaded!==k){twLoaded=k;makeTw()} else setTimeout(()=>TP.play(),400);
+    let n=0; const r=setInterval(()=>{ if(++n>10||twPlaying||A!==TA||!TP){clearInterval(r);return} TP.play() },1000); return }
+  if(A.playing()){A.pause();return} A.play(); let n=0; const r=setInterval(()=>{ if(++n>6||A!==YA||P.getPlayerState()===1){clearInterval(r);return} P.playVideo() },1500)};
 document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{const d=A.dur()||1e9;A.seek(Math.max(0,Math.min(A.time()+ +b.dataset.s,d-4)))});
 $('#go').onclick=()=>{const p=$('#jump').value.split(':').map(Number);let s=0;p.forEach(x=>s=s*60+x);A.seek(Math.min(s,(A.dur()||1e9)-4))};
 $('#vol').oninput=e=>A&&A.vol(+e.target.value);
@@ -122,7 +132,7 @@ function pseudo(){V.classList.add('pfs');document.body.style.overflow='hidden'}
 $('#fs').onclick=toggleFS; $('#shield').ondblclick=toggleFS;
 $('#next').onclick=()=>{ if(srcIdx+1<srcList.length){srcIdx++;LS['src_'+cur.id]=srcIdx;load();$('#msg').textContent=''}
   else $('#msg').textContent='No more parts/games for this match.'};
-$('#alt').onclick=()=>{const o=srcs(cur),i=o.findIndex(x=>x[0][0]===srcList[0][0]);srcList=o[(i+1)%o.length];srcIdx=0;load()};
+$('#alt').onclick=()=>{const o=srcs(cur),i=o.findIndex(x=>x[0][2]+x[0][0]===srcList[0][2]+srcList[0][0]);srcList=o[(i+1)%o.length];srcIdx=0;load()};
 $('#back').onclick=()=>{history.back()};
 onpopstate=()=>{if(P&&ready)P.pauseVideo();if(TP)TP.pause();$('#view').style.display='none';$('#list').style.display='block';render()};
 $('#showAll').onchange=render;
