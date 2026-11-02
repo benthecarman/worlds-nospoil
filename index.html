@@ -12,7 +12,7 @@ button{background:#2a3350;color:#eee;border:0;border-radius:6px;padding:8px 12px
 button:disabled{opacity:.4}
 #view{display:none;max-width:1100px;margin:auto;padding:10px}
 #wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;overflow:hidden}
-#yt{position:absolute;inset:0;width:100%;height:100%}
+#tw iframe{width:100%;height:100%;border:0}#yt{position:absolute;inset:0;width:100%;height:100%}
 #shield{position:absolute;inset:0;z-index:2}            /* blocks clicks/hover title on the iframe */
 #cover{position:absolute;inset:0;z-index:3;background:#000;display:flex;align-items:center;justify-content:center;font-size:20px;color:#aaa;text-align:center;padding:20px}
 #ctl{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;align-items:center}
@@ -24,7 +24,7 @@ button:disabled{opacity:.4}
 <div id="view">
  <button id="back">← Matches</button>
  <div id="info"></div>
- <div id="wrap"><div id="yt"></div><div id="shield"></div><div id="cover">Tap ▶ to start</div></div>
+ <div id="wrap"><div id="yt"></div><div id="tw" style="position:absolute;inset:0;display:none"></div><div id="shield"></div><div id="cover">Tap ▶ to start</div></div>
  <div id="ctl">
   <button id="pp">▶</button><span id="time">0:00</span>
   <button data-s="-60">−1m</button><button data-s="-10">−10s</button><button data-s="10">+10s</button><button data-s="60">+1m</button><button data-s="300">+5m</button>
@@ -49,7 +49,7 @@ function render(){
     const d=new Date(m.start), ds=d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
     if(ds!==day){day=ds;L.insertAdjacentHTML('beforeend',`<div class="day">${ds}</div>`)}
     const tbd=m.teams.includes('TBD'), show=!tbd&&visibleTeams(i);
-    const has=m.caedrel.length||m.official.length;
+    const has=(m.twitch||[]).length||m.caedrel.length||m.official.length;
     const el=document.createElement('div'); el.className='m'+(watched(m.id)?' w':'');
     el.innerHTML=`<div class="t">${show?m.teams.join(' vs '):(tbd?'Teams TBD':'<i>teams hidden</i> <button class="rv">reveal</button>')}<br><small>${m.stage} · Bo${m.bestOf} · ${d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${watched(m.id)?' · watched':''}</small></div>`;
     const b=document.createElement('button'); b.textContent=has?'Watch':'No VOD yet'; b.disabled=!has; b.onclick=()=>open(m,i);
@@ -58,41 +58,64 @@ function render(){
     const rv=el.querySelector('.rv'); if(rv) rv.onclick=()=>{rv.parentNode.textContent=m.teams.join(' vs ')};
     L.append(el)})}
 function open(m,i){
-  cur=m; srcList=m.caedrel.length?m.caedrel.map(v=>['Caedrel co-stream',v]):m.official.map(v=>['Official broadcast',v]);
+  cur=m; srcList=srcs(m)[0];
   srcIdx=+(LS['src_'+m.id]||0); if(srcIdx>=srcList.length) srcIdx=0;
   $('#list').style.display='none'; $('#view').style.display='block'; $('#msg').textContent='';
-  $('#alt').style.display=(m.caedrel.length&&m.official.length)?'':'none';
+  $('#alt').style.display=srcs(m).length>1?'':'none';
   load(); if(location.hash!=='#'+m.id)history.pushState({}, '', '#'+m.id)}
+function srcs(m){const o=[];
+  if((m.twitch||[]).length)o.push(m.twitch.map(x=>['Caedrel (full Twitch stream)',x.v,'tw',x.t]));
+  if(m.caedrel.length)o.push(m.caedrel.map(v=>['Caedrel co-stream (YouTube)',v,'yt',0]));
+  if(m.official.length)o.push(m.official.map(v=>['Official broadcast',v,'yt',0]));return o}
+let TP=null, A=null; // A = active adapter
+const YA={play:()=>P.playVideo(),pause:()=>P.pauseVideo(),seek:s=>P.seekTo(s,true),time:()=>P.getCurrentTime(),dur:()=>P.getDuration(),playing:()=>P.getPlayerState()===1,vol:v=>P.setVolume(v),rate:r=>P.setPlaybackRate(r)};
+const TA={play:()=>TP.play(),pause:()=>TP.pause(),seek:s=>TP.seek(s),time:()=>TP.getCurrentTime(),dur:()=>TP.getDuration(),playing:()=>!TP.isPaused(),vol:v=>TP.setVolume(v/100),rate:()=>{$('#msg').textContent='Speed not supported on Twitch'}};
 function load(){
-  const [kind,vid]=srcList[srcIdx]; const m=cur;
+  const [kind,vid,typ,t0]=srcList[srcIdx]; const m=cur;
+  if(typ==='tw') return loadTw(vid,t0);
+  $('#tw').style.display='none'; $('#yt').style.display=''; if(TP&&A===TA)TP.pause(); A=YA;
   $('#info').textContent=`${m.teams.join(' vs ')} · ${m.stage} · Source: ${kind}${srcList.length>1?'':''}`;
   cover('Tap ▶ to start'); const start=Math.floor(+LS['p_'+vid]||0);
   if(!P){P=new YT.Player('yt',{videoId:vid,playerVars:{controls:0,disablekb:1,fs:0,rel:0,iv_load_policy:3,modestbranding:1,playsinline:1,start},
      events:{onReady:()=>{ready=true;P.setVolume(+$('#vol').value)},onStateChange:st}})}
-  else P.cueVideoById({videoId:vid,startSeconds:start});
+  else{P.cueVideoById({videoId:vid,startSeconds:start});}
+  if(P&&ready)P.getIframe().style.display='';
   clearInterval(tick); tick=setInterval(()=>{ if(!ready||!P.getCurrentTime) return;
     const t=P.getCurrentTime(), d=P.getDuration(); $('#time').textContent=fmt(t);
     if(t>2) LS['p_'+vid]=t;
     if(d>0&&t>d-3&&P.getPlayerState()===1){P.pauseVideo();P.seekTo(d-3.5,true);ended()} },500)}
+function loadTw(vid,t0){
+  if(P&&ready)P.pauseVideo(); A=TA; $('#tw').style.display='';
+  const yi=document.getElementById('yt'); if(yi)yi.style.display='none';
+  $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (full Twitch stream)`;
+  cover('Tap ▶ to start'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0);
+  const go=()=>{ if(!TP){TP=new Twitch.Player('tw',{video:'v'+vid,time:start+'s',parent:[location.hostname],autoplay:false,width:'100%',height:'100%'});
+      TP.addEventListener(Twitch.Player.READY,()=>{TP.setVolume(+$('#vol').value/100)});
+      TP.addEventListener(Twitch.Player.PLAY,()=>{if(A===TA){$('#cover').style.display='none';$('#pp').textContent='❚❚'}});
+      TP.addEventListener(Twitch.Player.PAUSE,()=>{if(A===TA){$('#pp').textContent='▶';cover('Paused')}});
+      TP.addEventListener(Twitch.Player.ENDED,()=>{if(A===TA)ended()});}
+    else {TP.setVideo('v'+vid,start);TP.pause()} };
+  window.Twitch&&Twitch.Player?go():setTimeout(()=>loadTw(vid,t0),200);
+  clearInterval(tick); tick=setInterval(()=>{ if(!TP||A!==TA)return; const t=TP.getCurrentTime(); $('#time').textContent=fmt(t);
+    if(t>2) LS['p_tw'+vid+'_'+cur.id]=t },500)}
 function ended(){cover('End of this video. Use “Next part / game” or go back.');LS['w_'+cur.id]='1'}
 function cover(t){$('#cover').style.display='flex';$('#cover').textContent=t}
 function st(e){ if(e.data===1){$('#cover').style.display='none';$('#pp').textContent='❚❚'}
   else{ $('#pp').textContent='▶'; if(e.data===2) cover('Paused'); if(e.data===0){ended()} } }
-$('#pp').onclick=$('#cover').onclick=()=>{ if(!ready)return; P.getPlayerState()===1?P.pauseVideo():P.playVideo()};
-document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{const d=P.getDuration();P.seekTo(Math.max(0,Math.min(P.getCurrentTime()+ +b.dataset.s,d-4)),true)});
-$('#go').onclick=()=>{const p=$('#jump').value.split(':').map(Number);let s=0;p.forEach(x=>s=s*60+x);P.seekTo(Math.min(s,P.getDuration()-4),true)};
-$('#vol').oninput=e=>P.setVolume(+e.target.value);
-$('#spd').onchange=e=>P.setPlaybackRate(+e.target.value);
+$('#pp').onclick=$('#cover').onclick=()=>{ if(!A||(A===YA&&!ready))return; A.playing()?A.pause():A.play()};
+document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{const d=A.dur()||1e9;A.seek(Math.max(0,Math.min(A.time()+ +b.dataset.s,d-4)))});
+$('#go').onclick=()=>{const p=$('#jump').value.split(':').map(Number);let s=0;p.forEach(x=>s=s*60+x);A.seek(Math.min(s,(A.dur()||1e9)-4))};
+$('#vol').oninput=e=>A&&A.vol(+e.target.value);
+$('#spd').onchange=e=>A&&A.rate(+e.target.value);
 $('#fs').onclick=()=>{const w=$('#wrap');document.fullscreenElement?document.exitFullscreen():(w.requestFullscreen||w.webkitRequestFullscreen).call(w)};
 $('#next').onclick=()=>{ if(srcIdx+1<srcList.length){srcIdx++;LS['src_'+cur.id]=srcIdx;load();$('#msg').textContent=''}
   else $('#msg').textContent='No more parts/games for this match.'};
-$('#alt').onclick=()=>{const toOff=srcList[0][0].startsWith('Caedrel');
-  srcList=toOff?cur.official.map(v=>['Official broadcast',v]):cur.caedrel.map(v=>['Caedrel co-stream',v]);srcIdx=0;load()};
+$('#alt').onclick=()=>{const o=srcs(cur),i=o.findIndex(x=>x[0][0]===srcList[0][0]);srcList=o[(i+1)%o.length];srcIdx=0;load()};
 $('#back').onclick=()=>{history.back()};
-onpopstate=()=>{if(P&&ready)P.pauseVideo();$('#view').style.display='none';$('#list').style.display='block';render()};
+onpopstate=()=>{if(P&&ready)P.pauseVideo();if(TP)TP.pause();$('#view').style.display='none';$('#list').style.display='block';render()};
 $('#showAll').onchange=render;
 document.addEventListener('keydown',e=>{if($('#view').style.display!=='block'||e.target.tagName==='INPUT')return;
   if(e.key===' '){e.preventDefault();$('#pp').click()} if(e.key==='ArrowLeft')document.querySelector('[data-s="-10"]').click(); if(e.key==='ArrowRight')document.querySelector('[data-s="10"]').click()});
 window.onYouTubeIframeAPIReady=()=>{};
 fetch('data/matches.json?'+Date.now()).then(r=>r.json()).then(d=>{D=d;render();const h=location.hash.slice(1),i=D.matches.findIndex(m=>m.id===h);if(i>=0){const go=()=>window.YT&&YT.Player?open(D.matches[i],i):setTimeout(go,200);go()}});
-</script><script src="https://www.youtube.com/iframe_api"></script></body></html>
+</script><script src="https://www.youtube.com/iframe_api"></script><script src="https://player.twitch.tv/js/embed/v1.js"></script></body></html>
