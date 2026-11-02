@@ -1,0 +1,98 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>Worlds — no spoilers</title>
+<style>
+body{margin:0;background:#0b0d12;color:#ddd;font:15px system-ui,sans-serif}
+header{padding:12px 16px;background:#141824;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+h1{font-size:17px;margin:0;flex:1}
+#list{padding:10px 16px;max-width:900px;margin:auto}
+.day{margin:16px 0 6px;color:#8aa;font-weight:600}
+.m{display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;background:#161b26;margin:6px 0}
+.m .t{flex:1}.m small{color:#889}.w{opacity:.55}
+button{background:#2a3350;color:#eee;border:0;border-radius:6px;padding:8px 12px;font-size:14px;cursor:pointer}
+button:disabled{opacity:.4}
+#view{display:none;max-width:1100px;margin:auto;padding:10px}
+#wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;overflow:hidden}
+#yt{position:absolute;inset:0;width:100%;height:100%}
+#shield{position:absolute;inset:0;z-index:2}            /* blocks clicks/hover title on the iframe */
+#cover{position:absolute;inset:0;z-index:3;background:#000;display:flex;align-items:center;justify-content:center;font-size:20px;color:#aaa;text-align:center;padding:20px}
+#ctl{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;align-items:center}
+#time{font-variant-numeric:tabular-nums;min-width:80px;font-size:18px}
+#info{color:#99a;margin:6px 0}
+</style></head><body>
+<header><h1>Worlds 2026 — spoiler-free</h1><label><input type="checkbox" id="showAll"> show all team names</label></header>
+<div id="list"></div>
+<div id="view">
+ <button id="back">← Matches</button>
+ <div id="info"></div>
+ <div id="wrap"><div id="yt"></div><div id="shield"></div><div id="cover">Tap ▶ to start</div></div>
+ <div id="ctl">
+  <button id="pp">▶</button><span id="time">0:00</span>
+  <button data-s="-60">−1m</button><button data-s="-10">−10s</button><button data-s="10">+10s</button><button data-s="60">+1m</button><button data-s="300">+5m</button>
+  <input id="vol" type="range" min="0" max="100" value="80" style="width:90px">
+  <select id="spd"><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select>
+  <button id="fs">⛶</button>
+  <input id="jump" placeholder="h:mm:ss" size="7"><button id="go">Go</button>
+ </div>
+ <div id="ctl2"><button id="next">Next part / game ›</button> <button id="alt" style="display:none">Other source</button> <span id="msg"></span></div>
+</div>
+<script>
+const LS=localStorage, $=s=>document.querySelector(s);
+let D, P, cur=null, srcList=[], srcIdx=0, ready=false, tick;
+const fmt=s=>{s=Math.floor(s);const h=s/3600|0,m=(s%3600)/60|0,x=s%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0')};
+const watched=id=>LS['w_'+id]==='1';
+function visibleTeams(i){ // reveal teams only when every earlier match is watched (or toggle on)
+  if($('#showAll').checked) return true;
+  return D.matches.slice(0,i).every(m=>watched(m.id)||m.teams.includes('TBD')) }
+function render(){
+  const L=$('#list'); L.innerHTML=''; let day='';
+  D.matches.forEach((m,i)=>{
+    const d=new Date(m.start), ds=d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+    if(ds!==day){day=ds;L.insertAdjacentHTML('beforeend',`<div class="day">${ds}</div>`)}
+    const tbd=m.teams.includes('TBD'), show=!tbd&&visibleTeams(i);
+    const has=m.caedrel.length||m.official.length;
+    const el=document.createElement('div'); el.className='m'+(watched(m.id)?' w':'');
+    el.innerHTML=`<div class="t">${show?m.teams.join(' vs '):(tbd?'Teams TBD':'<i>teams hidden</i> <button class="rv">reveal</button>')}<br><small>${m.stage} · Bo${m.bestOf} · ${d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${watched(m.id)?' · watched':''}</small></div>`;
+    const b=document.createElement('button'); b.textContent=has?'Watch':'No VOD yet'; b.disabled=!has; b.onclick=()=>open(m,i);
+    el.append(b); const wb=document.createElement('button'); wb.textContent=watched(m.id)?'↺':'✓';
+    wb.title='mark watched'; wb.onclick=()=>{LS['w_'+m.id]=watched(m.id)?'0':'1';render()}; el.append(wb);
+    const rv=el.querySelector('.rv'); if(rv) rv.onclick=()=>{rv.parentNode.textContent=m.teams.join(' vs ')};
+    L.append(el)})}
+function open(m,i){
+  cur=m; srcList=m.caedrel.length?m.caedrel.map(v=>['Caedrel co-stream',v]):m.official.map(v=>['Official broadcast',v]);
+  srcIdx=+(LS['src_'+m.id]||0); if(srcIdx>=srcList.length) srcIdx=0;
+  $('#list').style.display='none'; $('#view').style.display='block'; $('#msg').textContent='';
+  $('#alt').style.display=(m.caedrel.length&&m.official.length)?'':'none';
+  load(); history.pushState({}, '', '#'+m.id)}
+function load(){
+  const [kind,vid]=srcList[srcIdx]; const m=cur;
+  $('#info').textContent=`${m.teams.join(' vs ')} · ${m.stage} · Source: ${kind}${srcList.length>1?'':''}`;
+  cover('Tap ▶ to start'); const start=Math.floor(+LS['p_'+vid]||0);
+  if(!P){P=new YT.Player('yt',{videoId:vid,playerVars:{controls:0,disablekb:1,fs:0,rel:0,iv_load_policy:3,modestbranding:1,playsinline:1,start},
+     events:{onReady:()=>{ready=true;P.setVolume(+$('#vol').value)},onStateChange:st}})}
+  else P.cueVideoById({videoId:vid,startSeconds:start});
+  clearInterval(tick); tick=setInterval(()=>{ if(!ready||!P.getCurrentTime) return;
+    const t=P.getCurrentTime(), d=P.getDuration(); $('#time').textContent=fmt(t);
+    if(t>2) LS['p_'+vid]=t;
+    if(d>0&&t>d-3&&P.getPlayerState()===1){P.pauseVideo();P.seekTo(d-3.5,true);ended()} },500)}
+function ended(){cover('End of this video. Use “Next part / game” or go back.');LS['w_'+cur.id]='1'}
+function cover(t){$('#cover').style.display='flex';$('#cover').textContent=t}
+function st(e){ if(e.data===1){$('#cover').style.display='none';$('#pp').textContent='❚❚'}
+  else{ $('#pp').textContent='▶'; if(e.data===2) cover('Paused'); if(e.data===0){ended()} } }
+$('#pp').onclick=$('#cover').onclick=()=>{ if(!ready)return; P.getPlayerState()===1?P.pauseVideo():P.playVideo()};
+document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{const d=P.getDuration();P.seekTo(Math.max(0,Math.min(P.getCurrentTime()+ +b.dataset.s,d-4)),true)});
+$('#go').onclick=()=>{const p=$('#jump').value.split(':').map(Number);let s=0;p.forEach(x=>s=s*60+x);P.seekTo(Math.min(s,P.getDuration()-4),true)};
+$('#vol').oninput=e=>P.setVolume(+e.target.value);
+$('#spd').onchange=e=>P.setPlaybackRate(+e.target.value);
+$('#fs').onclick=()=>{const w=$('#wrap');document.fullscreenElement?document.exitFullscreen():(w.requestFullscreen||w.webkitRequestFullscreen).call(w)};
+$('#next').onclick=()=>{ if(srcIdx+1<srcList.length){srcIdx++;LS['src_'+cur.id]=srcIdx;load();$('#msg').textContent=''}
+  else $('#msg').textContent='No more parts/games for this match.'};
+$('#alt').onclick=()=>{const toOff=srcList[0][0].startsWith('Caedrel');
+  srcList=toOff?cur.official.map(v=>['Official broadcast',v]):cur.caedrel.map(v=>['Caedrel co-stream',v]);srcIdx=0;load()};
+$('#back').onclick=()=>{history.back()};
+onpopstate=()=>{if(P&&ready)P.pauseVideo();$('#view').style.display='none';$('#list').style.display='block';render()};
+$('#showAll').onchange=render;
+document.addEventListener('keydown',e=>{if($('#view').style.display!=='block'||e.target.tagName==='INPUT')return;
+  if(e.key===' '){e.preventDefault();$('#pp').click()} if(e.key==='ArrowLeft')document.querySelector('[data-s="-10"]').click(); if(e.key==='ArrowRight')document.querySelector('[data-s="10"]').click()});
+window.onYouTubeIframeAPIReady=()=>{};
+fetch('data/matches.json?'+Date.now()).then(r=>r.json()).then(d=>{D=d;render()});
+</script><script src="https://www.youtube.com/iframe_api"></script></body></html>

@@ -1,0 +1,673 @@
+{
+ "matches": [
+  {
+   "id": "115660588583171786",
+   "start": "2026-10-15T18:00:00Z",
+   "stage": "Play-Ins",
+   "bestOf": 5,
+   "teams": [
+    "KC",
+    "C9"
+   ],
+   "caedrel": [
+    "mc7By4tVftY"
+   ],
+   "official": [
+    "MzoFIu6m4AU"
+   ]
+  },
+  {
+   "id": "115660588583040710",
+   "start": "2026-10-15T23:00:00Z",
+   "stage": "Play-Ins",
+   "bestOf": 5,
+   "teams": [
+    "MVK",
+    "FUR"
+   ],
+   "caedrel": [],
+   "official": [
+    "UWBRuboiCXk"
+   ]
+  },
+  {
+   "id": "115660588583171790",
+   "start": "2026-10-16T18:00:00Z",
+   "stage": "Play-Ins",
+   "bestOf": 5,
+   "teams": [
+    "KC",
+    "MVK"
+   ],
+   "caedrel": [
+    "aFFCXRu8-sA",
+    "0BJ_rCkPHiQ",
+    "Jk42BNTIRsw"
+   ],
+   "official": [
+    "ftCQbsVYrpk"
+   ]
+  },
+  {
+   "id": "115660588583171794",
+   "start": "2026-10-16T23:00:00Z",
+   "stage": "Play-Ins",
+   "bestOf": 5,
+   "teams": [
+    "FUR",
+    "C9"
+   ],
+   "caedrel": [],
+   "official": [
+    "5Ap6DXBEAQg"
+   ]
+  },
+  {
+   "id": "115660588583171798",
+   "start": "2026-10-17T18:00:00Z",
+   "stage": "Play-Ins",
+   "bestOf": 5,
+   "teams": [
+    "MVK",
+    "FUR"
+   ],
+   "caedrel": [],
+   "official": [
+    "6ja4BZuhV7M"
+   ]
+  },
+  {
+   "id": "116299649498303884",
+   "start": "2026-10-18T18:00:00Z",
+   "stage": "Play-Ins",
+   "bestOf": 5,
+   "teams": [
+    "KC",
+    "MVK"
+   ],
+   "caedrel": [
+    "Jk42BNTIRsw"
+   ],
+   "official": [
+    "4uxGpP2TG38"
+   ]
+  },
+  {
+   "id": "115660540726095005",
+   "start": "2026-10-23T17:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "IG",
+    "GEN"
+   ],
+   "caedrel": [],
+   "official": [
+    "qDDN87YowLE"
+   ]
+  },
+  {
+   "id": "115660540726095013",
+   "start": "2026-10-23T18:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "TES",
+    "HLE"
+   ],
+   "caedrel": [],
+   "official": [
+    "jqW0Y4J4ThM"
+   ]
+  },
+  {
+   "id": "115660540726095019",
+   "start": "2026-10-23T19:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "MKOI",
+    "BLG"
+   ],
+   "caedrel": [],
+   "official": [
+    "OWhxaPciNq8"
+   ]
+  },
+  {
+   "id": "115660540726095009",
+   "start": "2026-10-23T20:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "KC",
+    "AL"
+   ],
+   "caedrel": [],
+   "official": [
+    "8txB9yg9FNc"
+   ]
+  },
+  {
+   "id": "115660540726095011",
+   "start": "2026-10-23T21:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "DK",
+    "G2"
+   ],
+   "caedrel": [],
+   "official": [
+    "jLbhlvybfiA"
+   ]
+  },
+  {
+   "id": "115660540726095007",
+   "start": "2026-10-23T22:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "TLAW",
+    "CFO"
+   ],
+   "caedrel": [],
+   "official": [
+    "FATvv4Lk7IU"
+   ]
+  },
+  {
+   "id": "115660540726095015",
+   "start": "2026-10-23T23:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "LOS",
+    "T1"
+   ],
+   "caedrel": [],
+   "official": [
+    "VzymjkPh5wk"
+   ]
+  },
+  {
+   "id": "115660540726095017",
+   "start": "2026-10-24T00:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "LYON",
+    "TSW"
+   ],
+   "caedrel": [],
+   "official": [
+    "XYD_5fN4VAk"
+   ]
+  },
+  {
+   "id": "115660540726095029",
+   "start": "2026-10-24T17:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "TES",
+    "AL"
+   ],
+   "caedrel": [],
+   "official": [
+    "gLw65-r-MSI"
+   ]
+  },
+  {
+   "id": "115660540726095021",
+   "start": "2026-10-24T18:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "MKOI",
+    "CFO"
+   ],
+   "caedrel": [],
+   "official": [
+    "sLoG6iB0L2Q"
+   ]
+  },
+  {
+   "id": "115660540726095031",
+   "start": "2026-10-24T19:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "LOS",
+    "G2"
+   ],
+   "caedrel": [],
+   "official": [
+    "fMzwAhCt-aY"
+   ]
+  },
+  {
+   "id": "115660540726095023",
+   "start": "2026-10-24T20:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "KC",
+    "LYON"
+   ],
+   "caedrel": [],
+   "official": [
+    "jToExBjYenQ"
+   ]
+  },
+  {
+   "id": "115660540726095033",
+   "start": "2026-10-24T21:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "TSW",
+    "IG"
+   ],
+   "caedrel": [],
+   "official": [
+    "HgZFZSg3ydE"
+   ]
+  },
+  {
+   "id": "115660540726095025",
+   "start": "2026-10-24T22:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "HLE",
+    "GEN"
+   ],
+   "caedrel": [],
+   "official": [
+    "n68tMlqymqI"
+   ]
+  },
+  {
+   "id": "115660540726095027",
+   "start": "2026-10-24T23:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "DK",
+    "T1"
+   ],
+   "caedrel": [],
+   "official": [
+    "5wzTe_UxiU8"
+   ]
+  },
+  {
+   "id": "115660540726095035",
+   "start": "2026-10-25T00:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "TLAW",
+    "BLG"
+   ],
+   "caedrel": [],
+   "official": [
+    "o5dfRPbQWio"
+   ]
+  },
+  {
+   "id": "115660540726095045",
+   "start": "2026-10-25T17:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "IG",
+    "HLE"
+   ],
+   "caedrel": [],
+   "official": [
+    "36b3HH4BE4U"
+   ]
+  },
+  {
+   "id": "115660540726095047",
+   "start": "2026-10-25T18:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "TES",
+    "G2"
+   ],
+   "caedrel": [
+    "bej23K4pT9k"
+   ],
+   "official": [
+    "ae6RiRqpVGE"
+   ]
+  },
+  {
+   "id": "115660540726095037",
+   "start": "2026-10-25T19:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "MKOI",
+    "DK"
+   ],
+   "caedrel": [
+    "EeB-ip6pBkI"
+   ],
+   "official": [
+    "0QU9ZWDhpC0",
+    "Ik7hBIhxV3s"
+   ]
+  },
+  {
+   "id": "115660540726095041",
+   "start": "2026-10-25T22:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "LYON",
+    "GEN"
+   ],
+   "caedrel": [],
+   "official": [
+    "pu8g0xpHKF4"
+   ]
+  },
+  {
+   "id": "115660540726095049",
+   "start": "2026-10-26T17:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "T1",
+    "CFO"
+   ],
+   "caedrel": [
+    "jF6qRaLakjU"
+   ],
+   "official": [
+    "cmct78Iytg8"
+   ]
+  },
+  {
+   "id": "115660540726095051",
+   "start": "2026-10-26T18:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 1,
+   "teams": [
+    "BLG",
+    "KC"
+   ],
+   "caedrel": [
+    "jF6qRaLakjU"
+   ],
+   "official": [
+    "Lo6V52lXc94"
+   ]
+  },
+  {
+   "id": "115660540726095053",
+   "start": "2026-10-26T19:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "TSW",
+    "LOS"
+   ],
+   "caedrel": [
+    "OhobBjviRe0"
+   ],
+   "official": [
+    "CWkdng5xBI4"
+   ]
+  },
+  {
+   "id": "115660540726095057",
+   "start": "2026-10-26T22:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "AL",
+    "TLAW"
+   ],
+   "caedrel": [
+    "OhobBjviRe0"
+   ],
+   "official": [
+    "Q28aQ_pETPE"
+   ]
+  },
+  {
+   "id": "115660540726095061",
+   "start": "2026-10-28T20:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "T1",
+    "MKOI"
+   ],
+   "caedrel": [
+    "YF-p_iTQ8dI"
+   ],
+   "official": [
+    "qjfQ0J0jKJo"
+   ]
+  },
+  {
+   "id": "115660540726095065",
+   "start": "2026-10-28T23:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "LYON",
+    "IG"
+   ],
+   "caedrel": [
+    "7eq6FEV-RQk"
+   ],
+   "official": [
+    "0U1kZyurjyw"
+   ]
+  },
+  {
+   "id": "115660540726095073",
+   "start": "2026-10-29T20:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "KC",
+    "CFO"
+   ],
+   "caedrel": [
+    "ekjCaB5yjvU"
+   ],
+   "official": [
+    "JTY49mvxJN4"
+   ]
+  },
+  {
+   "id": "115660540726095069",
+   "start": "2026-10-29T23:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "BLG",
+    "TES"
+   ],
+   "caedrel": [
+    "rqP0dhct1rc"
+   ],
+   "official": [
+    "ze_Sif5Ypd0"
+   ]
+  },
+  {
+   "id": "115660540726095077",
+   "start": "2026-10-30T20:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "LOS",
+    "TLAW"
+   ],
+   "caedrel": [
+    "x4qXyJKI2VM"
+   ],
+   "official": [
+    "BTI-ahGsUIw"
+   ]
+  },
+  {
+   "id": "115660540726095081",
+   "start": "2026-10-30T23:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "G2",
+    "HLE"
+   ],
+   "caedrel": [
+    "egxXfv08dg8"
+   ],
+   "official": [
+    "MPNNUeBvCUI"
+   ]
+  },
+  {
+   "id": "115660540726095085",
+   "start": "2026-10-31T17:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "KC",
+    "MKOI"
+   ],
+   "caedrel": [
+    "dnbZfjYgfRU"
+   ],
+   "official": [
+    "p_FctmK9XtY"
+   ]
+  },
+  {
+   "id": "115660540726095089",
+   "start": "2026-10-31T20:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "LYON",
+    "LOS"
+   ],
+   "caedrel": [
+    "6VAmyos6a6o"
+   ],
+   "official": [
+    "49lzpkJuDf8"
+   ]
+  },
+  {
+   "id": "115660540726095093",
+   "start": "2026-10-31T23:00:00Z",
+   "stage": "Swiss",
+   "bestOf": 3,
+   "teams": [
+    "BLG",
+    "HLE"
+   ],
+   "caedrel": [
+    "N-Ao8zE2jdY"
+   ],
+   "official": [
+    "PO0LEHbyAIo"
+   ]
+  },
+  {
+   "id": "115660540726095109",
+   "start": "2026-11-03T22:00:00Z",
+   "stage": "Quarterfinals",
+   "bestOf": 5,
+   "teams": [
+    "TES",
+    "IG"
+   ],
+   "caedrel": [],
+   "official": []
+  },
+  {
+   "id": "115660540726095115",
+   "start": "2026-11-04T22:00:00Z",
+   "stage": "Quarterfinals",
+   "bestOf": 5,
+   "teams": [
+    "GEN",
+    "LYON"
+   ],
+   "caedrel": [],
+   "official": []
+  },
+  {
+   "id": "115660540726095097",
+   "start": "2026-11-05T22:00:00Z",
+   "stage": "Quarterfinals",
+   "bestOf": 5,
+   "teams": [
+    "DK",
+    "BLG"
+   ],
+   "caedrel": [],
+   "official": []
+  },
+  {
+   "id": "115660540726095103",
+   "start": "2026-11-06T22:00:00Z",
+   "stage": "Quarterfinals",
+   "bestOf": 5,
+   "teams": [
+    "T1",
+    "KC"
+   ],
+   "caedrel": [],
+   "official": []
+  },
+  {
+   "id": "115660540726095127",
+   "start": "2026-11-07T22:00:00Z",
+   "stage": "Semifinals",
+   "bestOf": 5,
+   "teams": [
+    "TBD",
+    "TBD"
+   ],
+   "caedrel": [],
+   "official": []
+  },
+  {
+   "id": "115660540726095121",
+   "start": "2026-11-08T22:00:00Z",
+   "stage": "Semifinals",
+   "bestOf": 5,
+   "teams": [
+    "TBD",
+    "TBD"
+   ],
+   "caedrel": [],
+   "official": []
+  },
+  {
+   "id": "115660540726095133",
+   "start": "2026-11-14T19:00:00Z",
+   "stage": "Finals",
+   "bestOf": 5,
+   "teams": [
+    "TBD",
+    "TBD"
+   ],
+   "caedrel": [],
+   "official": []
+  }
+ ]
+}
