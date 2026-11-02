@@ -81,7 +81,7 @@ function load(){
   $('#info').textContent=`${m.teams.join(' vs ')} · ${m.stage} · Source: ${kind}${srcList.length>1?'':''}`;
   cover('Tap ▶ to start'); const start=Math.floor(+LS['p_'+vid]||0);
   if(!P){P=new YT.Player('yt',{videoId:vid,playerVars:{controls:0,disablekb:1,fs:0,rel:0,iv_load_policy:3,modestbranding:1,playsinline:1,start},
-     events:{onReady:()=>{ready=true;P.setVolume(+$('#vol').value)},onStateChange:st}})}
+     events:{onReady:()=>{ready=true;P.setVolume(+$('#vol').value);if(window.wantPlay&&A===YA){wantPlay=0;$('#pp').click()}},onStateChange:st}})}
   else{P.cueVideoById({videoId:vid,startSeconds:start});}
   if(P&&ready)P.getIframe().style.display='';
   clearInterval(tick); tick=setInterval(()=>{ if(!ready||!P.getCurrentTime) return;
@@ -112,7 +112,7 @@ function ended(){cover('End of this video. Use “Next part / game” or go back
 function cover(t){$('#cover').style.display='flex';$('#cover').textContent=t}
 function st(e){ if(A!==YA)return; if(e.data===1){$('#cover').style.display='none';$('#pp').textContent='❚❚'}
   else{ $('#pp').textContent='▶'; if(e.data===2) cover('Paused'); if(e.data===0){ended()} } }
-$('#pp').onclick=$('#cover').onclick=()=>{ if(!A||(A===YA&&!ready))return;
+$('#pp').onclick=$('#cover').onclick=()=>{ if(!A)return; if(A===YA&&!ready){window.wantPlay=1;return}
   if(A===TA){ if(A.playing()){A.pause();return}  // Twitch refuses to play while covered: uncover first
     twUserPause=false; $('#cover').style.display='none'; $('#shield').style.display='none'; const k=twPending.join(); if(twLoaded!==k){twLoaded=k;makeTw()} else setTimeout(()=>TP.play(),400);
     let n=0; const r=setInterval(()=>{ if(++n>10||twPlaying||A!==TA||!TP){clearInterval(r);return} TP.play() },1000); return }
