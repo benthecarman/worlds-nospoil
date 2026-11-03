@@ -19,8 +19,13 @@ button:disabled{opacity:.4}
 #time{font-variant-numeric:tabular-nums;min-width:80px;font-size:18px}
 #view:fullscreen,#view.pfs{position:fixed;inset:0;max-width:none;margin:0;padding:6px;background:#000;z-index:99;display:flex!important;flex-direction:column;box-sizing:border-box}
 #view:-webkit-full-screen{width:100%;height:100%;max-width:none;margin:0;padding:6px;background:#000;display:flex!important;flex-direction:column;box-sizing:border-box}
-#view:fullscreen #wrap,#view.pfs #wrap,#view:-webkit-full-screen #wrap{flex:1;aspect-ratio:auto;min-height:0}
+#view:fullscreen #wrap,#view.pfs #wrap{flex:none;width:min(100%,calc((100vh - 12px)*16/9));aspect-ratio:16/9;margin:auto}
 #view:fullscreen #back,#view.pfs #back{display:none}
+#view:fullscreen #info,#view.pfs #info,#view:fullscreen #ctl,#view.pfs #ctl,#view:fullscreen #ctl2,#view.pfs #ctl2{position:absolute;left:10px;right:10px;z-index:5;background:rgba(0,0,0,.75);padding:6px;border-radius:6px;transition:opacity .3s}
+#view:fullscreen #info,#view.pfs #info{top:6px}
+#view:fullscreen #ctl,#view.pfs #ctl{bottom:46px}#view:fullscreen #ctl2,#view.pfs #ctl2{bottom:6px}
+#view.hidectl:fullscreen #info,#view.hidectl.pfs #info,#view.hidectl:fullscreen #ctl,#view.hidectl.pfs #ctl,#view.hidectl:fullscreen #ctl2,#view.hidectl.pfs #ctl2{opacity:0;pointer-events:none}
+#view.hidectl:fullscreen,#view.hidectl.pfs,#view.hidectl:fullscreen *,#view.hidectl.pfs *{cursor:none}
 #info{color:#99a;margin:6px 0}
 </style></head><body>
 <header><h1>Worlds 2026 — spoiler-free</h1><label><input type="checkbox" id="showAll"> show all team names</label></header>
@@ -28,7 +33,7 @@ button:disabled{opacity:.4}
 <div id="view">
  <button id="back">← Matches</button>
  <div id="info"></div>
- <div id="wrap"><div id="yt"></div><div id="tw" style="position:absolute;left:0;right:0;top:-70px;height:calc(100% + 140px);display:none"></div><div id="shield"></div><div id="cover">Tap ▶ to start</div></div>
+ <div id="wrap"><div id="yt"></div><div id="tw" style="position:absolute;left:0;right:0;top:-120px;height:calc(100% + 240px);display:none"></div><video id="nv" playsinline style="position:absolute;inset:0;width:100%;height:100%;display:none;background:#000"></video><div id="shield"></div><div id="cover">Tap ▶ to start</div></div>
  <div id="ctl">
   <button id="pp">▶</button><span id="time">0:00</span>
   <button data-s="-60">−1m</button><button data-s="-10">−10s</button><button data-s="10">+10s</button><button data-s="60">+1m</button><button data-s="300">+5m</button>
@@ -77,7 +82,7 @@ const TA={play:()=>TP.play(),pause:()=>{twUserPause=true;TP.pause()},seek:s=>TP.
 function load(){
   const [kind,vid,typ,t0]=srcList[srcIdx]; const m=cur;
   if(typ==='tw') return loadTw(vid,t0);
-  $('#tw').style.display='none'; $('#yt').style.display=''; $('#shield').style.display=''; if(TP){TP.pause();TP=null;twLoaded=null;$('#tw').innerHTML='';twPlaying=false} A=YA;
+  NV.pause(); NV.style.display='none'; curT0=0; $('#tw').style.display='none'; $('#yt').style.display=''; $('#shield').style.display=''; if(TP){TP.pause();TP=null;twLoaded=null;$('#tw').innerHTML='';twPlaying=false} A=YA;
   $('#info').textContent=`${m.teams.join(' vs ')} · ${m.stage} · Source: ${kind}${srcList.length>1?'':''}`;
   cover('Tap ▶ to start'); const start=Math.floor(+LS['p_'+vid]||0);
   if(!P){P=new YT.Player('yt',{videoId:vid,playerVars:{controls:0,disablekb:1,fs:0,rel:0,iv_load_policy:3,modestbranding:1,playsinline:1,start},
@@ -88,7 +93,32 @@ function load(){
     const t=P.getCurrentTime(), d=P.getDuration(); $('#time').textContent=fmt(t);
     if(t>2) LS['p_'+vid]=t;
     if(d>0&&t>d-3&&P.getPlayerState()===1){P.pauseVideo();P.seekTo(d-3.5,true);ended()} },500)}
+const NV=document.getElementById('nv'), NATIVE=!!NV.canPlayType('application/vnd.apple.mpegurl');
+let curT0=0, PROXY=new URLSearchParams(location.search).get('proxy')||'', HL=null;
+fetch('data/config.json?'+Date.now()).then(r=>r.json()).then(c=>{if(!PROXY)PROXY=c.hlsProxy||''}).catch(()=>{});
+const ownOK=()=>NATIVE||(PROXY&&window.Hls&&Hls.isSupported());
+const NA={play:()=>NV.play().catch(e=>$('#msg').textContent='Play failed: '+e.message),pause:()=>NV.pause(),seek:s=>NV.currentTime=s,time:()=>NV.currentTime,dur:()=>NV.duration,playing:()=>!NV.paused,vol:v=>NV.volume=v/100,rate:r=>NV.playbackRate=r};
+NV.onplay=()=>{if(A===NA){$('#cover').style.display='none';$('#pp').textContent='❚❚'}};
+NV.onpause=()=>{if(A===NA){$('#pp').textContent='▶';cover('Paused')}};
+NV.onended=()=>{if(A===NA)ended()};
+async function twHls(vid){ // own player: Twitch public GQL token + usher HLS, played natively (no CORS needed for <video>)
+  const q={query:'query($v:ID!){videoPlaybackAccessToken(id:$v,params:{platform:"web",playerBackend:"mediaplayer",playerType:"site"}){value signature}}',variables:{v:vid}};
+  const r=await fetch('https://gql.twitch.tv/gql',{method:'POST',headers:{'Client-Id':'kimne78kx3ncx6brgo4mv6wki5h1ko'},body:JSON.stringify(q)});
+  const t=(await r.json()).data.videoPlaybackAccessToken;
+  return 'https://usher.ttvnw.net/vod/'+vid+'.m3u8?'+new URLSearchParams({sig:t.signature,token:t.value,allow_source:'true',player:'twitchweb'})}
 function loadTw(vid,t0){
+  curT0=t0;
+  if(ownOK()){ if(P&&ready)P.pauseVideo(); if(TP){TP.pause()} $('#tw').style.display='none'; const yi=document.getElementById('yt'); if(yi)yi.style.display='none';
+    NV.style.display=''; A=NA; $('#shield').style.display='';
+    $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (full Twitch stream)`;
+    cover('Loading…'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0); twPending=[vid,start];
+    twHls(vid).then(u=>{ if(HL){HL.destroy();HL=null}
+      if(!NATIVE){HL=new Hls({startPosition:twPending[1],debug:location.search.includes('hlsdebug'),xhrSetup:(x,url)=>x.open('GET',PROXY+(PROXY.includes('?')?'&':'?')+'u='+encodeURIComponent(url),true)});HL.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)$('#msg').textContent='Stream error: '+d.details});HL.loadSource(u);HL.attachMedia(NV)} else NV.src=u; NV.addEventListener('loadedmetadata',()=>{NV.currentTime=start; NV.volume=+$('#vol').value/100; if(A===NA)cover('Tap ▶ to start')},{once:true})})
+      .catch(e=>{$('#msg').textContent='Own player failed ('+e.message+'), using Twitch embed'; loadTwEmbed(vid,t0)});
+    clearInterval(tick); tick=setInterval(()=>{ if(A!==NA)return; const t=NV.currentTime; $('#time').textContent=fmt(Math.max(0,t-curT0)); if(t>2) LS['p_tw'+vid+'_'+cur.id]=t },500); return }
+  loadTwEmbed(vid,t0)}
+function loadTwEmbed(vid,t0){
+  NV.pause(); NV.style.display='none';
   if(P&&ready)P.pauseVideo(); A=TA; $('#tw').style.display='';
   const yi=document.getElementById('yt'); if(yi)yi.style.display='none';
   $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (full Twitch stream)`;
@@ -98,7 +128,7 @@ function loadTw(vid,t0){
 
   };
   A=TA;
-  clearInterval(tick); tick=setInterval(()=>{ if(!TP||A!==TA)return; const t=TP.getCurrentTime(); $('#time').textContent=fmt(t);
+  clearInterval(tick); tick=setInterval(()=>{ if(!TP||A!==TA)return; const t=TP.getCurrentTime(); $('#time').textContent=fmt(Math.max(0,t-curT0));
     if(t>2) LS['p_tw'+twPending[0]+'_'+cur.id]=t },500)}
 function twFrame(vid,start){ // API-free fallback (e.g. tracking protection blocked embed/v1.js)
   const h=start/3600|0,m=(start%3600)/60|0,x=start%60;
@@ -136,7 +166,9 @@ function toggleFS(){
   const rq=V.requestFullscreen||V.webkitRequestFullscreen;
   if(rq){try{const p=rq.call(V);if(p&&p.catch)p.catch(()=>pseudo());return}catch(e){}}
   pseudo()}
-function pseudo(){V.classList.add('pfs');document.body.style.overflow='hidden'}
+function pseudo(){V.classList.add('pfs','hidectl');document.body.style.overflow='hidden'}
+let hideT; function poke(){V.classList.remove('hidectl');clearTimeout(hideT);hideT=setTimeout(()=>V.classList.add('hidectl'),2500)}
+V.addEventListener('mousemove',poke); document.addEventListener('fullscreenchange',()=>{if(fsEl())V.classList.add('hidectl');else V.classList.remove('hidectl')});
 $('#fs').onclick=toggleFS; $('#shield').ondblclick=toggleFS;
 $('#next').onclick=()=>{ if(srcIdx+1<srcList.length){srcIdx++;LS['src_'+cur.id]=srcIdx;load();$('#msg').textContent=''}
   else $('#msg').textContent='No more parts/games for this match.'};
@@ -149,4 +181,4 @@ document.addEventListener('keydown',e=>{if($('#view').style.display!=='block'||e
 window.onerror=(m)=>{const e=document.querySelector('#msg');if(e)e.textContent='Page error: '+m};
 window.onYouTubeIframeAPIReady=()=>{};
 fetch('data/matches.json?'+Date.now()).then(r=>r.json()).then(d=>{D=d;render();const h=(location.hash.match(/\d{6,}/g)||[]),i=D.matches.findIndex(m=>h.includes(m.id));if(i>=0){let n=0;const go=()=>(window.YT&&YT.Player)||++n>20?open(D.matches[i],i):setTimeout(go,200);go()}});
-</script><script src="https://www.youtube.com/iframe_api"></script><script src="https://player.twitch.tv/js/embed/v1.js?v=4" onerror="window.TWJS_FAIL=1"></script></body></html>
+</script><script src="https://www.youtube.com/iframe_api"></script><script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script><script src="https://player.twitch.tv/js/embed/v1.js?v=5" onerror="window.TWJS_FAIL=1"></script></body></html>
