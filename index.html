@@ -97,10 +97,16 @@ function loadTw(vid,t0){
   const go=()=>{ if(!TP){ return }  // created on first ▶ click, while visible (Twitch blocks play if hidden at creation)
 
   };
-  window.Twitch&&Twitch.Player?go():setTimeout(()=>loadTw(vid,t0),200);
+  A=TA;
   clearInterval(tick); tick=setInterval(()=>{ if(!TP||A!==TA)return; const t=TP.getCurrentTime(); $('#time').textContent=fmt(t);
     if(t>2) LS['p_tw'+twPending[0]+'_'+cur.id]=t },500)}
-function makeTw(){const [vid,start]=twPending;
+function twFrame(vid,start){ // API-free fallback (e.g. tracking protection blocked embed/v1.js)
+  const h=start/3600|0,m=(start%3600)/60|0,x=start%60;
+  $('#tw').innerHTML=`<iframe src="https://player.twitch.tv/?video=v${vid}&parent=${location.hostname}&time=${h}h${m}m${x}s&autoplay=true" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+  TP=null; A=null; $('#msg').textContent='Basic Twitch player (page controls unavailable). If it does not start, click the video.'}
+function makeTw(){try{makeTw2()}catch(e){$('#msg').textContent='Twitch player error: '+e.message+' (using basic player)'; twFrame(...twPending)}}
+function makeTw2(){const [vid,start]=twPending;
+  if(!(window.Twitch&&Twitch.Player)) return twFrame(vid,start);
   if(TP){TP.setVideo('v'+vid,start);TP.play();return}
   TP=new Twitch.Player('tw',{video:'v'+vid,time:start+'s',parent:[location.hostname],autoplay:true,width:'100%',height:'100%'});
       TP.addEventListener(Twitch.Player.READY,()=>{TP.setVolume(+$('#vol').value/100);TP.play()});
@@ -112,14 +118,15 @@ function ended(){cover('End of this video. Use “Next part / game” or go back
 function cover(t){$('#cover').style.display='flex';$('#cover').textContent=t}
 function st(e){ if(A!==YA)return; if(e.data===1){$('#cover').style.display='none';$('#pp').textContent='❚❚'}
   else{ $('#pp').textContent='▶'; if(e.data===2) cover('Paused'); if(e.data===0){ended()} } }
-$('#pp').onclick=$('#cover').onclick=()=>{ if(!A)return; if(A===YA&&!ready){window.wantPlay=1;return}
+$('#pp').onclick=$('#cover').onclick=()=>{ try{play1()}catch(e){$('#msg').textContent='Error: '+e.message} };
+function play1(){ if(!A&&!TP&&$('#tw iframe')&&srcList[srcIdx][2]==='tw')return; if(!A&&srcList[srcIdx]&&srcList[srcIdx][2]==='tw'){ $('#cover').style.display='none'; return twFrame(...twPending)} if(!A)return; if(A===YA&&!ready){window.wantPlay=1;return}
   if(A===TA){ if(A.playing()){A.pause();return}  // Twitch refuses to play while covered: uncover first
     twUserPause=false; $('#cover').style.display='none'; $('#shield').style.display='none'; const k=twPending.join(); if(twLoaded!==k){twLoaded=k;makeTw()} else setTimeout(()=>TP.play(),400);
     let n=0; const r=setInterval(()=>{ if(twPlaying||A!==TA||!TP){clearInterval(r);if(twPlaying)$('#msg').textContent='';return}
       if(++n===4)$('#msg').textContent='If it does not start, click the video itself once (Twitch\'s own play button).'; if(n>10){clearInterval(r);return} TP.play() },1000); return }
   if(A.playing()){A.pause();return} A.play(); let n=0; const r=setInterval(()=>{ if(++n>6||A!==YA||P.getPlayerState()===1){clearInterval(r);return} P.playVideo() },1500)};
-document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{const d=A.dur()||1e9;A.seek(Math.max(0,Math.min(A.time()+ +b.dataset.s,d-4)))});
-$('#go').onclick=()=>{const p=$('#jump').value.split(':').map(Number);let s=0;p.forEach(x=>s=s*60+x);A.seek(Math.min(s,(A.dur()||1e9)-4))};
+document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{if(!A)return;const d=A.dur()||1e9;A.seek(Math.max(0,Math.min(A.time()+ +b.dataset.s,d-4)))});
+$('#go').onclick=()=>{if(!A)return;const p=$('#jump').value.split(':').map(Number);let s=0;p.forEach(x=>s=s*60+x);A.seek(Math.min(s,(A.dur()||1e9)-4))};
 $('#vol').oninput=e=>A&&A.vol(+e.target.value);
 $('#spd').onchange=e=>A&&A.rate(+e.target.value);
 const V=$('#view'), fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
@@ -139,6 +146,7 @@ onpopstate=()=>{if(P&&ready)P.pauseVideo();if(TP)TP.pause();$('#view').style.dis
 $('#showAll').onchange=render;
 document.addEventListener('keydown',e=>{if($('#view').style.display!=='block'||e.target.tagName==='INPUT')return;
   if(e.key===' '){e.preventDefault();$('#pp').click()} if(e.key==='f'||e.key==='F')toggleFS(); if(e.key==='Escape'&&V.classList.contains('pfs'))toggleFS(); if(e.key==='ArrowLeft')document.querySelector('[data-s="-10"]').click(); if(e.key==='ArrowRight')document.querySelector('[data-s="10"]').click()});
+window.onerror=(m)=>{const e=document.querySelector('#msg');if(e)e.textContent='Page error: '+m};
 window.onYouTubeIframeAPIReady=()=>{};
-fetch('data/matches.json?'+Date.now()).then(r=>r.json()).then(d=>{D=d;render();const h=location.hash.slice(1),i=D.matches.findIndex(m=>m.id===h);if(i>=0){const go=()=>window.YT&&YT.Player?open(D.matches[i],i):setTimeout(go,200);go()}});
-</script><script src="https://www.youtube.com/iframe_api"></script><script src="https://player.twitch.tv/js/embed/v1.js"></script></body></html>
+fetch('data/matches.json?'+Date.now()).then(r=>r.json()).then(d=>{D=d;render();const h=(location.hash.match(/\d{6,}/g)||[]),i=D.matches.findIndex(m=>h.includes(m.id));if(i>=0){let n=0;const go=()=>(window.YT&&YT.Player)||++n>20?open(D.matches[i],i):setTimeout(go,200);go()}});
+</script><script src="https://www.youtube.com/iframe_api"></script><script src="https://player.twitch.tv/js/embed/v1.js?v=4" onerror="window.TWJS_FAIL=1"></script></body></html>
