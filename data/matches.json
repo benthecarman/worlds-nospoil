@@ -830,7 +830,12 @@
    ],
    "caedrel": [],
    "official": [],
-   "twitch": []
+   "twitch": [
+    {
+     "v": "2918508215",
+     "t": 21608
+    }
+   ]
   },
   {
    "id": "115660540726095115",
@@ -878,7 +883,7 @@
    "bestOf": 5,
    "teams": [
     "TBD",
-    "TBD"
+    "IG"
    ],
    "caedrel": [],
    "official": [],
