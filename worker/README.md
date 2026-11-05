@@ -1,3 +1,5 @@
+Deployed production URL: `https://hls-proxy.benthecarman.workers.dev/` (wired in `data/config.json`).
+
 # Twitch HLS CORS proxy
 
 Chrome/Firefox need this so the Worlds site can use hls.js (deep forward buffer + locked 1080p). Safari can play Twitch HLS natively, but cannot be told to buffer minutes ahead.
@@ -20,7 +22,7 @@ npx wrangler deploy
 4. Put the printed URL into `data/config.json`:
 
 ```json
-{"hlsProxy": "https://hls-proxy.<subdomain>.workers.dev/"}
+{"hlsProxy": "https://hls-proxy.benthecarman.workers.dev/"}
 ```
 
 5. Commit + push (or tell the bot the URL and it will wire + publish).
