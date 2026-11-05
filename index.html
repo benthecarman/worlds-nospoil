@@ -169,31 +169,58 @@ async function twMasterUrl(vid){
   const t=(await r.json()).data.videoPlaybackAccessToken;
   // Always include source (1080p60); we lock to it below — never ABR down.
   return 'https://usher.ttvnw.net/vod/'+vid+'.m3u8?'+new URLSearchParams({sig:t.signature,token:t.value,allow_source:'true',player:'twitchweb',playlist_include_framerate:'true'})}
-function pickSourcePlaylist(masterText){
-  // Prefer GROUP-ID chunked / NAME 1080 / highest BANDWIDTH. Return absolute media playlist URL.
+function pickSourceLevel(masterText){
+  // Index of the source/1080p variant among #EXT-X-STREAM-INF entries (hls.js level order).
   const lines=masterText.split(/\r?\n/);
-  let best=null, bestBw=-1, pending=null;
+  let i=-1, bestI=0, bestBw=-1, pending=null;
   for(const line of lines){
     if(line.startsWith('#EXT-X-STREAM-INF:')){
       const bw=+(line.match(/BANDWIDTH=(\d+)/)||[])[1]||0;
-      const isChunked=/VIDEO="chunked"|RESOLUTION=1920x1080|FRAME-RATE=60/.test(line);
+      const isChunked=/VIDEO="chunked"|RESOLUTION=1920x1080/.test(line);
       pending={bw, isChunked}; continue;
     }
     if(pending && line && !line.startsWith('#')){
+      i++;
       const score=(pending.isChunked?1e12:0)+pending.bw;
-      if(score>bestBw){ bestBw=score; best=line.trim() }
+      if(score>bestBw){ bestBw=score; bestI=i }
       pending=null;
     }
   }
-  return best;
+  return Math.max(0, bestI);
 }
 function lockHlsToSource(hl){
   if(!hl||!hl.levels||!hl.levels.length) return;
-  // Highest height, then highest bitrate — never auto level.
   let idx=0, best=-1;
   hl.levels.forEach((l,i)=>{ const s=(l.height||0)*1e9+(l.bitrate||0); if(s>=best){best=s;idx=i} });
   hl.autoLevelEnabled=false;
-  hl.currentLevel=idx; hl.loadLevel=idx; hl.nextLevel=idx; hl.nextLoadLevel=idx;
+  // Prefer loadLevel/nextLevel so we do not flush the playhead back to 0 when already correct.
+  hl.nextLevel=idx; hl.loadLevel=idx; hl.nextLoadLevel=idx;
+  if(hl.currentLevel!==idx) hl.currentLevel=idx;
+}
+function twStartAt(vid,t0){
+  // Absolute VOD seconds. Ignore resume points before match start (polluted when startPosition failed).
+  const saved=+LS['p_tw'+vid+'_'+cur.id];
+  t0=Math.floor(+t0||0);
+  if(Number.isFinite(saved) && saved>=t0) return Math.floor(saved);
+  return t0;
+}
+function ensureTwSeek(start){
+  // hls.js startPosition is often reset by level locking; force until we first land near start, then stop.
+  start=Math.max(0, Math.floor(start||0));
+  let tries=0, done=false;
+  const close=()=>{ const t=NV.currentTime||0; return Math.abs(t-start)<=2 };
+  const apply=()=>{
+    if(done||A!==NA) return true;
+    if(close()){ done=true; return true }
+    try{
+      if(HL && typeof HL.startLoad==='function') HL.startLoad(start);
+      if(NV && NV.readyState>=1) NV.currentTime=start;
+    }catch(e){}
+    if(close()){ done=true; return true }
+    return false;
+  };
+  const kick=()=>{ if(apply()) return; if(++tries>60) return; setTimeout(kick, 100) };
+  return {apply, kick, close:()=>done||close(), done:()=>done};
 }
 const HLS_DEEP={
   // Buffer far ahead so HD stalls less; trim already-watched data.
@@ -217,48 +244,53 @@ async function loadTw(vid,t0){
     stopOthers('nv');
     NV.style.display=''; A=NA; $('#shield').style.display='';
     $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (Twitch 1080p) · deep buffer`;
-    cover('Loading HD…'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0); twPending=[vid,start];
+    cover('Loading HD…'); const start=twStartAt(vid,t0); twPending=[vid,start];
     twMasterUrl(vid).then(async masterUrl=>{
       if(HL){try{HL.destroy()}catch(e){} HL=null}
-      // Fetch master through proxy, lock onto the source media playlist so ABR cannot drop below HD.
-      let playUrl=masterUrl;
+      // Load the master (proxied). Pin startLevel to source/1080p and seek to match start.
+      let srcLevel=0, masterTxt='';
       try{
-        const masterTxt=await fetch(proxied(masterUrl)).then(r=>{ if(!r.ok) throw new Error('master '+r.status); return r.text() });
-        const src=pickSourcePlaylist(masterTxt);
-        if(src) playUrl=src;
-      }catch(e){ /* fall through to master; still lock level after parse */ }
+        masterTxt=await fetch(proxied(masterUrl)).then(r=>{ if(!r.ok) throw new Error('master '+r.status); return r.text() });
+        srcLevel=pickSourceLevel(masterTxt);
+      }catch(e){ /* hls.js will fetch master itself */ }
+      const seeker=ensureTwSeek(start);
       HL=new Hls(Object.assign({}, HLS_DEEP, hlsProxyHooks(), {
         startPosition:start,
+        startLevel:srcLevel,
+        autoLevelEnabled:false,
         debug:location.search.includes('hlsdebug')
       }));
-      HL.on(Hls.Events.MANIFEST_PARSED,()=>lockHlsToSource(HL));
+      HL.on(Hls.Events.MANIFEST_PARSED,()=>{ lockHlsToSource(HL); seeker.apply(); try{HL.startLoad(start)}catch(e){}; seeker.kick() });
+      HL.on(Hls.Events.LEVEL_LOADED,()=>seeker.apply());
+      HL.on(Hls.Events.FRAG_CHANGED,()=>{ if(!seeker.done()) seeker.apply() });
       HL.on(Hls.Events.LEVEL_SWITCHING,()=>lockHlsToSource(HL)); // refuse downswitches
       HL.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)$('#msg').textContent='Stream error: '+d.details});
-      // Always load via proxy — playUrl from the master may be raw CloudFront.
-      HL.loadSource(proxied(playUrl)); HL.attachMedia(NV);
-      NV.addEventListener('loadedmetadata',()=>{ NV.volume=+$('#vol').value/100; if(A===NA)cover('Tap ▶ to start')},{once:true});
+      HL.loadSource(proxied(masterUrl)); HL.attachMedia(NV);
+      NV.addEventListener('loadedmetadata',()=>{ NV.volume=+$('#vol').value/100; seeker.apply(); if(A===NA)cover('Tap ▶ to start')},{once:true});
     }).catch(e=>{$('#msg').textContent='Own player failed ('+e.message+'), using Twitch embed'; loadTwEmbed(vid,t0)});
-    clearInterval(tick); tick=setInterval(()=>{ if(A!==NA)return; const t=NV.currentTime; $('#time').textContent=fmt(Math.max(0,t-curT0)); updateBufLabel(); if(t>2) LS['p_tw'+vid+'_'+cur.id]=t },500); return }
+    clearInterval(tick); tick=setInterval(()=>{ if(A!==NA)return; const t=NV.currentTime; $('#time').textContent=fmt(Math.max(0,t-curT0)); updateBufLabel();
+      // Only persist resume points at/after match start (absolute VOD time).
+      if(t>=curT0+1) LS['p_tw'+vid+'_'+cur.id]=t },500); return }
   // No proxy: Safari can still play native HLS at source (browser-controlled buffer); else Twitch embed fallback.
   if(NATIVE){
     stopOthers('nv'); NV.style.display=''; A=NA; $('#shield').style.display='';
     $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (Twitch 1080p) · native HLS`;
-    cover('Loading HD…'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0); twPending=[vid,start];
+    cover('Loading HD…'); const start=twStartAt(vid,t0); twPending=[vid,start];
     twMasterUrl(vid).then(u=>{
       NV.src=u;
       NV.addEventListener('loadedmetadata',()=>{NV.currentTime=start; NV.volume=+$('#vol').value/100; if(A===NA)cover('Tap ▶ to start')},{once:true});
     }).catch(e=>{$('#msg').textContent='Own player failed ('+e.message+'), using Twitch embed'; loadTwEmbed(vid,t0)});
-    clearInterval(tick); tick=setInterval(()=>{ if(A!==NA)return; const t=NV.currentTime; $('#time').textContent=fmt(Math.max(0,t-curT0)); updateBufLabel(); if(t>2) LS['p_tw'+vid+'_'+cur.id]=t },500); return }
+    clearInterval(tick); tick=setInterval(()=>{ if(A!==NA)return; const t=NV.currentTime; $('#time').textContent=fmt(Math.max(0,t-curT0)); updateBufLabel(); if(t>=curT0+1) LS['p_tw'+vid+'_'+cur.id]=t },500); return }
   $('#msg').textContent='Deep HD buffer needs the HLS proxy (not configured yet). Falling back to Twitch embed.';
   loadTwEmbed(vid,t0)}
 function loadTwEmbed(vid,t0){
   stopOthers('tw');
   A=TA; $('#tw').style.display='';
   $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (Twitch embed fallback)`;
-  cover('Tap ▶ to start'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0);
+  cover('Tap ▶ to start'); const start=twStartAt(vid,t0);
   twPending=[vid,start];
   clearInterval(tick); tick=setInterval(()=>{ if(!TP||A!==TA)return; const t=TP.getCurrentTime(); $('#time').textContent=fmt(Math.max(0,t-curT0));
-    if(t>2) LS['p_tw'+twPending[0]+'_'+cur.id]=t },500)}
+    if(t>=curT0+1) LS['p_tw'+twPending[0]+'_'+cur.id]=t },500)}
 function applyTwQuality(){
   // Embed fallback: force source/1080 when the API exposes it.
   if(!TP||!TP.getQualities) return;
