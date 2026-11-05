@@ -1,5 +1,17 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer"><title>Worlds — no spoilers</title>
+<link rel="dns-prefetch" href="https://gql.twitch.tv">
+<link rel="dns-prefetch" href="https://usher.ttvnw.net">
+<link rel="dns-prefetch" href="https://player.twitch.tv">
+<link rel="dns-prefetch" href="https://static.twitchcdn.net">
+<link rel="dns-prefetch" href="https://www.youtube.com">
+<link rel="dns-prefetch" href="https://i.ytimg.com">
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<link rel="preconnect" href="https://gql.twitch.tv" crossorigin>
+<link rel="preconnect" href="https://usher.ttvnw.net" crossorigin>
+<link rel="preconnect" href="https://player.twitch.tv" crossorigin>
+<link rel="preconnect" href="https://static.twitchcdn.net" crossorigin>
+<link rel="preconnect" href="https://www.youtube.com">
 <style>
 body{margin:0;background:#0b0d12;color:#ddd;font:15px system-ui,sans-serif}
 header{padding:12px 16px;background:#141824;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -17,6 +29,7 @@ button:disabled{opacity:.4}
 #cover{position:absolute;inset:0;z-index:3;background:#000;display:flex;align-items:center;justify-content:center;font-size:20px;color:#aaa;text-align:center;padding:20px}
 #ctl{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;align-items:center}
 #time{font-variant-numeric:tabular-nums;min-width:80px;font-size:18px}
+#qual{background:#2a3350;color:#eee;border:0;border-radius:6px;padding:8px 8px;font-size:14px}
 #view:fullscreen,#view.pfs{position:fixed;inset:0;max-width:none;margin:0;padding:6px;background:#000;z-index:99;display:flex!important;flex-direction:column;box-sizing:border-box}
 #view:-webkit-full-screen{width:100%;height:100%;max-width:none;margin:0;padding:6px;background:#000;display:flex!important;flex-direction:column;box-sizing:border-box}
 #view:fullscreen #wrap,#view.pfs #wrap{flex:none;width:min(100%,calc((100vh - 12px)*16/9));aspect-ratio:16/9;margin:auto}
@@ -33,11 +46,19 @@ button:disabled{opacity:.4}
 <div id="view">
  <button id="back">← Matches</button>
  <div id="info"></div>
- <div id="wrap"><div id="yt"></div><div id="tw" style="position:absolute;left:0;right:0;top:-120px;height:calc(100% + 240px);display:none"></div><video id="nv" playsinline style="position:absolute;inset:0;width:100%;height:100%;display:none;background:#000"></video><div id="shield"></div><div id="cover">Tap ▶ to start</div></div>
+ <div id="wrap"><div id="yt"></div><div id="tw" style="position:absolute;left:0;right:0;top:-120px;height:calc(100% + 240px);display:none"></div><video id="nv" playsinline preload="auto" style="position:absolute;inset:0;width:100%;height:100%;display:none;background:#000"></video><div id="shield"></div><div id="cover">Tap ▶ to start</div></div>
  <div id="ctl">
   <button id="pp">▶</button><span id="time">0:00</span>
   <button data-s="-60">−1m</button><button data-s="-10">−10s</button><button data-s="10">+10s</button><button data-s="60">+1m</button><button data-s="300">+5m</button>
   <input id="vol" type="range" min="0" max="100" value="80" style="width:90px">
+  <select id="qual" title="Video quality (lower = less buffering)">
+    <option value="720p60" selected>720p</option>
+    <option value="auto">Auto</option>
+    <option value="chunked">Source (1080p)</option>
+    <option value="480p30">480p</option>
+    <option value="360p30">360p</option>
+    <option value="160p30">160p</option>
+  </select>
   <select id="spd"><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select>
   <button id="fs" title="Fullscreen (f / double-click)">⛶</button>
   <input id="jump" placeholder="h:mm:ss" size="7"><button id="go">Go</button>
@@ -49,6 +70,9 @@ const LS=localStorage, $=s=>document.querySelector(s);
 let D, P, cur=null, srcList=[], srcIdx=0, ready=false, tick;
 const fmt=s=>{s=Math.floor(s);const h=s/3600|0,m=(s%3600)/60|0,x=s%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0')};
 const watched=id=>LS['w_'+id]==='1';
+const QUAL_DEFAULT='720p60';
+function preferredQuality(){const q=LS['vq']||QUAL_DEFAULT;return q}
+(function initQual(){const q=preferredQuality(), sel=$('#qual'); if([...sel.options].some(o=>o.value===q)) sel.value=q; else sel.value=QUAL_DEFAULT})();
 function visibleTeams(i){ // reveal teams only when every earlier match is watched (or toggle on)
   if($('#showAll').checked) return true;
   return D.matches.slice(0,i).every(m=>watched(m.id)||m.teams.includes('TBD')) }
@@ -79,10 +103,15 @@ function srcs(m){const o=[];
 let TP=null, A=null, twPlaying=false, twUserPause=false, twPending=null, twLoaded=null; // A = active adapter
 const YA={play:()=>P.playVideo(),pause:()=>P.pauseVideo(),seek:s=>P.seekTo(s,true),time:()=>P.getCurrentTime(),dur:()=>P.getDuration(),playing:()=>P.getPlayerState()===1,vol:v=>P.setVolume(v),rate:r=>P.setPlaybackRate(r)};
 const TA={play:()=>TP.play(),pause:()=>{twUserPause=true;TP.pause()},seek:s=>TP.seek(s),time:()=>TP.getCurrentTime(),dur:()=>TP.getDuration(),playing:()=>twPlaying,vol:v=>TP.setVolume(v/100),rate:()=>{$('#msg').textContent='Speed not supported on Twitch'}};
+function stopOthers(keep){
+  if(keep!=='yt' && P && ready){try{P.pauseVideo()}catch(e){}}
+  if(keep!=='tw'){try{if(TP)TP.pause()}catch(e){} $('#tw').innerHTML=''; TP=null; twLoaded=null; twPlaying=false; $('#tw').style.display='none'}
+  if(keep!=='nv'){ if(HL){try{HL.destroy()}catch(e){} HL=null} try{NV.pause()}catch(e){} NV.removeAttribute('src'); try{NV.load()}catch(e){} NV.style.display='none'}
+}
 function load(){
   const [kind,vid,typ,t0]=srcList[srcIdx]; const m=cur;
   if(typ==='tw') return loadTw(vid,t0);
-  NV.pause(); NV.style.display='none'; curT0=0; $('#tw').style.display='none'; $('#yt').style.display=''; $('#shield').style.display=''; if(TP){TP.pause();TP=null;twLoaded=null;$('#tw').innerHTML='';twPlaying=false} A=YA;
+  stopOthers('yt'); curT0=0; $('#yt').style.display=''; $('#shield').style.display=''; A=YA;
   $('#info').textContent=`${m.teams.join(' vs ')} · ${m.stage} · Source: ${kind}${srcList.length>1?'':''}`;
   cover('Tap ▶ to start'); const start=Math.floor(+LS['p_'+vid]||0);
   if(!P){P=new YT.Player('yt',{videoId:vid,playerVars:{controls:0,disablekb:1,fs:0,rel:0,iv_load_policy:3,modestbranding:1,playsinline:1,start},
@@ -94,52 +123,105 @@ function load(){
     if(t>2) LS['p_'+vid]=t;
     if(d>0&&t>d-3&&P.getPlayerState()===1){P.pauseVideo();P.seekTo(d-3.5,true);ended()} },500)}
 const NV=document.getElementById('nv'), NATIVE=!!NV.canPlayType('application/vnd.apple.mpegurl');
-let curT0=0, PROXY=new URLSearchParams(location.search).get('proxy')||'', HL=null;
+let curT0=0, PROXY=new URLSearchParams(location.search).get('proxy')||'', HL=null, hlsJsPromise=null, twJsPromise=null;
 fetch('data/config.json?'+Date.now()).then(r=>r.json()).then(c=>{if(!PROXY)PROXY=c.hlsProxy||''}).catch(()=>{});
 const ownOK=()=>NATIVE||(PROXY&&window.Hls&&Hls.isSupported());
+function ensureHlsJs(){ if(window.Hls) return Promise.resolve(); if(hlsJsPromise) return hlsJsPromise;
+  hlsJsPromise=new Promise((res,rej)=>{const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js'; s.onload=res; s.onerror=()=>rej(new Error('hls.js load failed')); document.head.appendChild(s)}); return hlsJsPromise}
+function ensureTwJs(){ if(window.Twitch&&Twitch.Player) return Promise.resolve(); if(window.TWJS_FAIL) return Promise.reject(new Error('Twitch embed blocked')); if(twJsPromise) return twJsPromise;
+  twJsPromise=new Promise((res,rej)=>{const s=document.createElement('script'); s.src='https://player.twitch.tv/js/embed/v1.js?v=6'; s.onload=()=> (window.Twitch&&Twitch.Player)?res():rej(new Error('Twitch Player missing')); s.onerror=()=>{window.TWJS_FAIL=1;rej(new Error('Twitch embed blocked'))}; document.head.appendChild(s)}); return twJsPromise}
 const NA={play:()=>NV.play().catch(e=>$('#msg').textContent='Play failed: '+e.message),pause:()=>NV.pause(),seek:s=>NV.currentTime=s,time:()=>NV.currentTime,dur:()=>NV.duration,playing:()=>!NV.paused,vol:v=>NV.volume=v/100,rate:r=>NV.playbackRate=r};
 NV.onplay=()=>{if(A===NA){$('#cover').style.display='none';$('#pp').textContent='❚❚'}};
 NV.onpause=()=>{if(A===NA){$('#pp').textContent='▶';cover('Paused')}};
 NV.onended=()=>{if(A===NA)ended()};
-async function twHls(vid){ // own player: Twitch public GQL token + usher HLS, played natively (no CORS needed for <video>)
+NV.onwaiting=()=>{if(A===NA)$('#msg').textContent='Buffering…'};
+NV.onplaying=()=>{if(A===NA && $('#msg').textContent==='Buffering…') $('#msg').textContent=''};
+function qualHeight(q){return ({chunked:1080,'1080p60':1080,'720p60':720,'480p30':480,'360p30':360,'160p30':160})[q]||0}
+async function twHls(vid){ // own player: Twitch public GQL token + usher HLS
   const q={query:'query($v:ID!){videoPlaybackAccessToken(id:$v,params:{platform:"web",playerBackend:"mediaplayer",playerType:"site"}){value signature}}',variables:{v:vid}};
   const r=await fetch('https://gql.twitch.tv/gql',{method:'POST',headers:{'Client-Id':'kimne78kx3ncx6brgo4mv6wki5h1ko'},body:JSON.stringify(q)});
   const t=(await r.json()).data.videoPlaybackAccessToken;
-  return 'https://usher.ttvnw.net/vod/'+vid+'.m3u8?'+new URLSearchParams({sig:t.signature,token:t.value,allow_source:'true',player:'twitchweb'})}
-function loadTw(vid,t0){
+  const want=preferredQuality();
+  // Drop 1080p source from the master unless the user asked for it — biggest buffering win for the own player.
+  const allowSource=(want==='chunked'||want==='1080p60')?'true':'false';
+  return 'https://usher.ttvnw.net/vod/'+vid+'.m3u8?'+new URLSearchParams({sig:t.signature,token:t.value,allow_source:allowSource,player:'twitchweb',playlist_include_framerate:'true'})}
+function pickHlsLevel(hl, want){
+  if(!want||want==='auto'){hl.currentLevel=-1; return}
+  const h=qualHeight(want); if(!h){hl.currentLevel=-1; return}
+  let idx=hl.levels.findIndex(l=>l.height===h);
+  if(idx<0) idx=hl.levels.findIndex(l=>Math.abs((l.height||0)-h)<40);
+  if(idx<0 && want==='chunked') idx=hl.levels.length?hl.levels.length-1:-1;
+  if(idx>=0){hl.currentLevel=idx; hl.loadLevel=idx; hl.nextLevel=idx}
+}
+async function loadTw(vid,t0){
   curT0=t0;
-  if(ownOK()){ if(P&&ready)P.pauseVideo(); if(TP){TP.pause()} $('#tw').style.display='none'; const yi=document.getElementById('yt'); if(yi)yi.style.display='none';
+  // Prefer own player when available (Safari native HLS, or hls.js via CORS proxy).
+  const canOwn=NATIVE||!!PROXY;
+  if(canOwn){
+    try{ if(!NATIVE) await ensureHlsJs() }catch(e){ return loadTwEmbed(vid,t0) }
+    if(!ownOK()) return loadTwEmbed(vid,t0);
+    stopOthers('nv');
     NV.style.display=''; A=NA; $('#shield').style.display='';
     $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (full Twitch stream)`;
     cover('Loading…'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0); twPending=[vid,start];
-    twHls(vid).then(u=>{ if(HL){HL.destroy();HL=null}
-      if(!NATIVE){HL=new Hls({startPosition:twPending[1],debug:location.search.includes('hlsdebug'),xhrSetup:(x,url)=>x.open('GET',PROXY+(PROXY.includes('?')?'&':'?')+'u='+encodeURIComponent(url),true)});HL.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)$('#msg').textContent='Stream error: '+d.details});HL.loadSource(u);HL.attachMedia(NV)} else NV.src=u; NV.addEventListener('loadedmetadata',()=>{NV.currentTime=start; NV.volume=+$('#vol').value/100; if(A===NA)cover('Tap ▶ to start')},{once:true})})
-      .catch(e=>{$('#msg').textContent='Own player failed ('+e.message+'), using Twitch embed'; loadTwEmbed(vid,t0)});
+    twHls(vid).then(u=>{ if(HL){try{HL.destroy()}catch(e){} HL=null}
+      if(!NATIVE){
+        HL=new Hls({
+          startPosition:start,
+          capLevelToPlayerSize:true,
+          maxBufferLength:45,
+          maxMaxBufferLength:90,
+          maxBufferSize:60*1000*1000,
+          abrEwmaDefaultEstimate:1800000,
+          startLevel:-1,
+          testBandwidth:true,
+          progressive:true,
+          debug:location.search.includes('hlsdebug'),
+          xhrSetup:(x,url)=>x.open('GET',PROXY+(PROXY.includes('?')?'&':'?')+'u='+encodeURIComponent(url),true)
+        });
+        HL.on(Hls.Events.MANIFEST_PARSED,()=>pickHlsLevel(HL, preferredQuality()));
+        HL.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)$('#msg').textContent='Stream error: '+d.details});
+        HL.loadSource(u); HL.attachMedia(NV);
+        // Do not also seek on loadedmetadata — startPosition already did; a second seek re-buffers.
+        NV.addEventListener('loadedmetadata',()=>{ NV.volume=+$('#vol').value/100; if(A===NA)cover('Tap ▶ to start')},{once:true});
+      } else {
+        NV.src=u;
+        NV.addEventListener('loadedmetadata',()=>{NV.currentTime=start; NV.volume=+$('#vol').value/100; if(A===NA)cover('Tap ▶ to start')},{once:true});
+      }
+    }).catch(e=>{$('#msg').textContent='Own player failed ('+e.message+'), using Twitch embed'; loadTwEmbed(vid,t0)});
     clearInterval(tick); tick=setInterval(()=>{ if(A!==NA)return; const t=NV.currentTime; $('#time').textContent=fmt(Math.max(0,t-curT0)); if(t>2) LS['p_tw'+vid+'_'+cur.id]=t },500); return }
   loadTwEmbed(vid,t0)}
 function loadTwEmbed(vid,t0){
-  NV.pause(); NV.style.display='none';
-  if(P&&ready)P.pauseVideo(); A=TA; $('#tw').style.display='';
-  const yi=document.getElementById('yt'); if(yi)yi.style.display='none';
+  stopOthers('tw');
+  A=TA; $('#tw').style.display='';
   $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (full Twitch stream)`;
   cover('Tap ▶ to start'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0);
   twPending=[vid,start];
-  const go=()=>{ if(!TP){ return }  // created on first ▶ click, while visible (Twitch blocks play if hidden at creation)
-
-  };
-  A=TA;
   clearInterval(tick); tick=setInterval(()=>{ if(!TP||A!==TA)return; const t=TP.getCurrentTime(); $('#time').textContent=fmt(Math.max(0,t-curT0));
     if(t>2) LS['p_tw'+twPending[0]+'_'+cur.id]=t },500)}
+function applyTwQuality(){
+  if(!TP||!TP.getQualities) return;
+  const want=preferredQuality();
+  try{
+    if(want==='auto'){TP.setQuality('auto');return}
+    const quals=TP.getQualities()||[];
+    const hit=quals.find(x=>x.group===want)||quals.find(x=>x.name===want)||
+      (want==='chunked'?quals.find(x=>x.group==='chunked'||/1080|source/i.test(x.name||'')):null)||
+      quals.find(x=>qualHeight(want)&&Math.abs((x.height||0)-qualHeight(want))<40);
+    if(hit) TP.setQuality(hit.group||hit.name); else TP.setQuality(want);
+  }catch(e){}}
 function twFrame(vid,start){ // API-free fallback (e.g. tracking protection blocked embed/v1.js)
   const h=start/3600|0,m=(start%3600)/60|0,x=start%60;
-  $('#tw').innerHTML=`<iframe src="https://player.twitch.tv/?video=v${vid}&parent=${location.hostname}&time=${h}h${m}m${x}s&autoplay=true" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
-  TP=null; A=null; $('#msg').textContent='Basic Twitch player (page controls unavailable). If it does not start, click the video.'}
+  const q=preferredQuality();
+  // quality= is best-effort; Twitch may ignore it on the basic iframe.
+  $('#tw').innerHTML=`<iframe src="https://player.twitch.tv/?video=v${vid}&parent=${location.hostname}&time=${h}h${m}m${x}s&autoplay=true&quality=${encodeURIComponent(q==='chunked'?'chunked':q)}" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+  TP=null; A=null; $('#msg').textContent='Basic Twitch player (page controls unavailable). If it does not start, click the video. Use Twitch’s gear menu for quality if buffering.'}
 function makeTw(){try{makeTw2()}catch(e){$('#msg').textContent='Twitch player error: '+e.message+' (using basic player)'; twFrame(...twPending)}}
 function makeTw2(){const [vid,start]=twPending;
   if(!(window.Twitch&&Twitch.Player)) return twFrame(vid,start);
-  if(TP){TP.setVideo('v'+vid,start);TP.play();return}
+  if(TP){TP.setVideo('v'+vid,start); applyTwQuality(); TP.play();return}
   TP=new Twitch.Player('tw',{video:'v'+vid,time:start+'s',parent:[location.hostname],autoplay:true,width:'100%',height:'100%'});
-      TP.addEventListener(Twitch.Player.READY,()=>{TP.setVolume(+$('#vol').value/100);TP.play()});
+      TP.addEventListener(Twitch.Player.READY,()=>{TP.setVolume(+$('#vol').value/100); applyTwQuality(); TP.play()});
       TP.addEventListener(Twitch.Player.PLAY,()=>{twPlaying=true;if(TP.getMuted())TP.setMuted(false);if(A===TA){$('#cover').style.display='none';$('#pp').textContent='❚❚'}});
       TP.addEventListener(Twitch.Player.PAUSE,()=>{twPlaying=false;if(A===TA&&!twUserPause&&!TP.getMuted()){TP.setMuted(true);TP.play();$('#msg').innerHTML='Browser blocked sound — <button onclick="TP.setMuted(false);this.parentNode.textContent=\'\'">🔊 Unmute</button>';return}
       if(A===TA){$('#pp').textContent='▶';cover('Paused')}});
@@ -151,14 +233,27 @@ function st(e){ if(A!==YA)return; if(e.data===1){$('#cover').style.display='none
 $('#pp').onclick=$('#cover').onclick=()=>{ try{play1()}catch(e){$('#msg').textContent='Error: '+e.message} };
 function play1(){ if(!A&&!TP&&$('#tw iframe')&&srcList[srcIdx][2]==='tw')return; if(!A&&srcList[srcIdx]&&srcList[srcIdx][2]==='tw'){ $('#cover').style.display='none'; return twFrame(...twPending)} if(!A)return; if(A===YA&&!ready){window.wantPlay=1;return}
   if(A===TA){ if(A.playing()){A.pause();return}  // Twitch refuses to play while covered: uncover first
-    twUserPause=false; $('#cover').style.display='none'; $('#shield').style.display='none'; const k=twPending.join(); if(twLoaded!==k){twLoaded=k;makeTw()} else setTimeout(()=>TP.play(),400);
-    let n=0; const r=setInterval(()=>{ if(twPlaying||A!==TA||!TP){clearInterval(r);if(twPlaying)$('#msg').textContent='';return}
-      if(++n===4)$('#msg').textContent='If it does not start, click the video itself once (Twitch\'s own play button).'; if(n>10){clearInterval(r);return} TP.play() },1000); return }
+    twUserPause=false; $('#cover').style.display='none'; $('#shield').style.display='none';
+    const k=twPending.join();
+    const kick=()=>{ if(twLoaded!==k){twLoaded=k;makeTw()} else setTimeout(()=>{applyTwQuality();TP.play()},400);
+      let n=0; const r=setInterval(()=>{ if(twPlaying||A!==TA||!TP){clearInterval(r);if(twPlaying)$('#msg').textContent='';return}
+        if(++n===4)$('#msg').textContent='If it does not start, click the video itself once (Twitch\'s own play button).'; if(n>10){clearInterval(r);return} TP.play() },1000)};
+    ensureTwJs().then(kick).catch(()=>{ twLoaded=k; twFrame(...twPending)}); return }
   if(A.playing()){A.pause();return} A.play(); let n=0; const r=setInterval(()=>{ if(++n>6||A!==YA||P.getPlayerState()===1){clearInterval(r);return} P.playVideo() },1500)};
 document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{if(!A)return;const d=A.dur()||1e9;A.seek(Math.max(0,Math.min(A.time()+ +b.dataset.s,d-4)))});
 $('#go').onclick=()=>{if(!A)return;const p=$('#jump').value.split(':').map(Number);let s=0;p.forEach(x=>s=s*60+x);A.seek(Math.min(s,(A.dur()||1e9)-4))};
 $('#vol').oninput=e=>A&&A.vol(+e.target.value);
 $('#spd').onchange=e=>A&&A.rate(+e.target.value);
+$('#qual').onchange=e=>{
+  LS['vq']=e.target.value;
+  if(!cur||!srcList[srcIdx]||srcList[srcIdx][2]!=='tw') return;
+  // Re-apply without changing playback position preference: reload current Twitch source.
+  const was=A&&A.playing&&A.playing();
+  const tpos=A&&A.time?A.time():0;
+  if(tpos>2) LS['p_tw'+srcList[srcIdx][1]+'_'+cur.id]=tpos;
+  loadTw(srcList[srcIdx][1], srcList[srcIdx][3]);
+  if(was) setTimeout(()=>{try{$('#pp').click()}catch(err){}}, 600);
+};
 const V=$('#view'), fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
 function toggleFS(){
   if(V.classList.contains('pfs')){V.classList.remove('pfs');document.body.style.overflow='';return}
@@ -174,11 +269,11 @@ $('#next').onclick=()=>{ if(srcIdx+1<srcList.length){srcIdx++;LS['src_'+cur.id]=
   else $('#msg').textContent='No more parts/games for this match.'};
 $('#alt').onclick=()=>{const o=srcs(cur),i=o.findIndex(x=>x[0][2]+x[0][0]===srcList[0][2]+srcList[0][0]);srcList=o[(i+1)%o.length];srcIdx=0;load()};
 $('#back').onclick=()=>{history.back()};
-onpopstate=()=>{if(P&&ready)P.pauseVideo();if(TP)TP.pause();$('#view').style.display='none';$('#list').style.display='block';render()};
+onpopstate=()=>{stopOthers(); $('#view').style.display='none';$('#list').style.display='block';render()};
 $('#showAll').onchange=render;
-document.addEventListener('keydown',e=>{if($('#view').style.display!=='block'||e.target.tagName==='INPUT')return;
+document.addEventListener('keydown',e=>{if($('#view').style.display!=='block'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
   if(e.key===' '){e.preventDefault();$('#pp').click()} if(e.key==='f'||e.key==='F')toggleFS(); if(e.key==='Escape'&&V.classList.contains('pfs'))toggleFS(); if(e.key==='ArrowLeft')document.querySelector('[data-s="-10"]').click(); if(e.key==='ArrowRight')document.querySelector('[data-s="10"]').click()});
 window.onerror=(m)=>{const e=document.querySelector('#msg');if(e)e.textContent='Page error: '+m};
 window.onYouTubeIframeAPIReady=()=>{};
 fetch('data/matches.json?'+Date.now()).then(r=>r.json()).then(d=>{D=d;render();const h=(location.hash.match(/\d{6,}/g)||[]),i=D.matches.findIndex(m=>h.includes(m.id));if(i>=0){let n=0;const go=()=>(window.YT&&YT.Player)||++n>20?open(D.matches[i],i):setTimeout(go,200);go()}});
-</script><script src="https://www.youtube.com/iframe_api"></script><script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script><script src="https://player.twitch.tv/js/embed/v1.js?v=5" onerror="window.TWJS_FAIL=1"></script></body></html>
+</script><script src="https://www.youtube.com/iframe_api"></script></body></html>
