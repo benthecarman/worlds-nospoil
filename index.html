@@ -29,7 +29,7 @@ button:disabled{opacity:.4}
 #cover{position:absolute;inset:0;z-index:3;background:#000;display:flex;align-items:center;justify-content:center;font-size:20px;color:#aaa;text-align:center;padding:20px}
 #ctl{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;align-items:center}
 #time{font-variant-numeric:tabular-nums;min-width:80px;font-size:18px}
-#qual{background:#2a3350;color:#eee;border:0;border-radius:6px;padding:8px 8px;font-size:14px}
+#buf{color:#8a9;font-variant-numeric:tabular-nums;min-width:7ch}
 #view:fullscreen,#view.pfs{position:fixed;inset:0;max-width:none;margin:0;padding:6px;background:#000;z-index:99;display:flex!important;flex-direction:column;box-sizing:border-box}
 #view:-webkit-full-screen{width:100%;height:100%;max-width:none;margin:0;padding:6px;background:#000;display:flex!important;flex-direction:column;box-sizing:border-box}
 #view:fullscreen #wrap,#view.pfs #wrap{flex:none;width:min(100%,calc((100vh - 12px)*16/9));aspect-ratio:16/9;margin:auto}
@@ -48,17 +48,9 @@ button:disabled{opacity:.4}
  <div id="info"></div>
  <div id="wrap"><div id="yt"></div><div id="tw" style="position:absolute;left:0;right:0;top:-120px;height:calc(100% + 240px);display:none"></div><video id="nv" playsinline preload="auto" style="position:absolute;inset:0;width:100%;height:100%;display:none;background:#000"></video><div id="shield"></div><div id="cover">Tap ▶ to start</div></div>
  <div id="ctl">
-  <button id="pp">▶</button><span id="time">0:00</span>
+  <button id="pp">▶</button><span id="time">0:00</span><span id="buf" title="Buffered ahead"></span>
   <button data-s="-60">−1m</button><button data-s="-10">−10s</button><button data-s="10">+10s</button><button data-s="60">+1m</button><button data-s="300">+5m</button>
   <input id="vol" type="range" min="0" max="100" value="80" style="width:90px">
-  <select id="qual" title="Video quality (lower = less buffering)">
-    <option value="720p60" selected>720p</option>
-    <option value="auto">Auto</option>
-    <option value="chunked">Source (1080p)</option>
-    <option value="480p30">480p</option>
-    <option value="360p30">360p</option>
-    <option value="160p30">160p</option>
-  </select>
   <select id="spd"><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select>
   <button id="fs" title="Fullscreen (f / double-click)">⛶</button>
   <input id="jump" placeholder="h:mm:ss" size="7"><button id="go">Go</button>
@@ -70,9 +62,8 @@ const LS=localStorage, $=s=>document.querySelector(s);
 let D, P, cur=null, srcList=[], srcIdx=0, ready=false, tick;
 const fmt=s=>{s=Math.floor(s);const h=s/3600|0,m=(s%3600)/60|0,x=s%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0')};
 const watched=id=>LS['w_'+id]==='1';
-const QUAL_DEFAULT='720p60';
-function preferredQuality(){const q=LS['vq']||QUAL_DEFAULT;return q}
-(function initQual(){const q=preferredQuality(), sel=$('#qual'); if([...sel.options].some(o=>o.value===q)) sel.value=q; else sel.value=QUAL_DEFAULT})();
+// Drop any prior "start at 720p" preference — HD/source only.
+try{ if(LS['vq'] && LS['vq']!=='chunked' && LS['vq']!=='1080p60') LS.removeItem('vq') }catch(e){}
 function visibleTeams(i){ // reveal teams only when every earlier match is watched (or toggle on)
   if($('#showAll').checked) return true;
   return D.matches.slice(0,i).every(m=>watched(m.id)||m.teams.includes('TBD')) }
@@ -107,12 +98,13 @@ function stopOthers(keep){
   if(keep!=='yt' && P && ready){try{P.pauseVideo()}catch(e){}}
   if(keep!=='tw'){try{if(TP)TP.pause()}catch(e){} $('#tw').innerHTML=''; TP=null; twLoaded=null; twPlaying=false; $('#tw').style.display='none'}
   if(keep!=='nv'){ if(HL){try{HL.destroy()}catch(e){} HL=null} try{NV.pause()}catch(e){} NV.removeAttribute('src'); try{NV.load()}catch(e){} NV.style.display='none'}
+  const b=$('#buf'); if(b) b.textContent='';
 }
 function load(){
   const [kind,vid,typ,t0]=srcList[srcIdx]; const m=cur;
   if(typ==='tw') return loadTw(vid,t0);
   stopOthers('yt'); curT0=0; $('#yt').style.display=''; $('#shield').style.display=''; A=YA;
-  $('#info').textContent=`${m.teams.join(' vs ')} · ${m.stage} · Source: ${kind}${srcList.length>1?'':''}`;
+  $('#info').textContent=`${m.teams.join(' vs ')} · ${m.stage} · Source: ${kind}`;
   cover('Tap ▶ to start'); const start=Math.floor(+LS['p_'+vid]||0);
   if(!P){P=new YT.Player('yt',{videoId:vid,playerVars:{controls:0,disablekb:1,fs:0,rel:0,iv_load_policy:3,modestbranding:1,playsinline:1,start},
      events:{onReady:()=>{ready=true;P.setVolume(+$('#vol').value);if(window.wantPlay&&A===YA){wantPlay=0;$('#pp').click()}},onStateChange:st}})}
@@ -125,97 +117,139 @@ function load(){
 const NV=document.getElementById('nv'), NATIVE=!!NV.canPlayType('application/vnd.apple.mpegurl');
 let curT0=0, PROXY=new URLSearchParams(location.search).get('proxy')||'', HL=null, hlsJsPromise=null, twJsPromise=null;
 fetch('data/config.json?'+Date.now()).then(r=>r.json()).then(c=>{if(!PROXY)PROXY=c.hlsProxy||''}).catch(()=>{});
-const ownOK=()=>NATIVE||(PROXY&&window.Hls&&Hls.isSupported());
+const proxyOK=()=>!!PROXY;
+const ownOK=()=>proxyOK()&&window.Hls&&Hls.isSupported();
 function ensureHlsJs(){ if(window.Hls) return Promise.resolve(); if(hlsJsPromise) return hlsJsPromise;
   hlsJsPromise=new Promise((res,rej)=>{const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js'; s.onload=res; s.onerror=()=>rej(new Error('hls.js load failed')); document.head.appendChild(s)}); return hlsJsPromise}
 function ensureTwJs(){ if(window.Twitch&&Twitch.Player) return Promise.resolve(); if(window.TWJS_FAIL) return Promise.reject(new Error('Twitch embed blocked')); if(twJsPromise) return twJsPromise;
   twJsPromise=new Promise((res,rej)=>{const s=document.createElement('script'); s.src='https://player.twitch.tv/js/embed/v1.js?v=6'; s.onload=()=> (window.Twitch&&Twitch.Player)?res():rej(new Error('Twitch Player missing')); s.onerror=()=>{window.TWJS_FAIL=1;rej(new Error('Twitch embed blocked'))}; document.head.appendChild(s)}); return twJsPromise}
+function proxied(url){ return PROXY+(PROXY.includes('?')?'&':'?')+'u='+encodeURIComponent(url) }
 const NA={play:()=>NV.play().catch(e=>$('#msg').textContent='Play failed: '+e.message),pause:()=>NV.pause(),seek:s=>NV.currentTime=s,time:()=>NV.currentTime,dur:()=>NV.duration,playing:()=>!NV.paused,vol:v=>NV.volume=v/100,rate:r=>NV.playbackRate=r};
 NV.onplay=()=>{if(A===NA){$('#cover').style.display='none';$('#pp').textContent='❚❚'}};
 NV.onpause=()=>{if(A===NA){$('#pp').textContent='▶';cover('Paused')}};
 NV.onended=()=>{if(A===NA)ended()};
 NV.onwaiting=()=>{if(A===NA)$('#msg').textContent='Buffering…'};
 NV.onplaying=()=>{if(A===NA && $('#msg').textContent==='Buffering…') $('#msg').textContent=''};
-function qualHeight(q){return ({chunked:1080,'1080p60':1080,'720p60':720,'480p30':480,'360p30':360,'160p30':160})[q]||0}
-async function twHls(vid){ // own player: Twitch public GQL token + usher HLS
+function bufAhead(){
+  try{
+    const t=NV.currentTime||0; const b=NV.buffered; let end=t;
+    for(let i=0;i<b.length;i++){ if(b.start(i)-0.5<=t && b.end(i)>end) end=b.end(i) }
+    return Math.max(0, end-t);
+  }catch(e){return 0}
+}
+function updateBufLabel(){
+  const el=$('#buf'); if(!el) return;
+  if(A!==NA){el.textContent='';return}
+  const a=bufAhead(); el.textContent=a>=1?('+'+fmt(a)+' buf'):'';
+}
+async function twMasterUrl(vid){
   const q={query:'query($v:ID!){videoPlaybackAccessToken(id:$v,params:{platform:"web",playerBackend:"mediaplayer",playerType:"site"}){value signature}}',variables:{v:vid}};
   const r=await fetch('https://gql.twitch.tv/gql',{method:'POST',headers:{'Client-Id':'kimne78kx3ncx6brgo4mv6wki5h1ko'},body:JSON.stringify(q)});
   const t=(await r.json()).data.videoPlaybackAccessToken;
-  const want=preferredQuality();
-  // Drop 1080p source from the master unless the user asked for it — biggest buffering win for the own player.
-  const allowSource=(want==='chunked'||want==='1080p60')?'true':'false';
-  return 'https://usher.ttvnw.net/vod/'+vid+'.m3u8?'+new URLSearchParams({sig:t.signature,token:t.value,allow_source:allowSource,player:'twitchweb',playlist_include_framerate:'true'})}
-function pickHlsLevel(hl, want){
-  if(!want||want==='auto'){hl.currentLevel=-1; return}
-  const h=qualHeight(want); if(!h){hl.currentLevel=-1; return}
-  let idx=hl.levels.findIndex(l=>l.height===h);
-  if(idx<0) idx=hl.levels.findIndex(l=>Math.abs((l.height||0)-h)<40);
-  if(idx<0 && want==='chunked') idx=hl.levels.length?hl.levels.length-1:-1;
-  if(idx>=0){hl.currentLevel=idx; hl.loadLevel=idx; hl.nextLevel=idx}
+  // Always include source (1080p60); we lock to it below — never ABR down.
+  return 'https://usher.ttvnw.net/vod/'+vid+'.m3u8?'+new URLSearchParams({sig:t.signature,token:t.value,allow_source:'true',player:'twitchweb',playlist_include_framerate:'true'})}
+function pickSourcePlaylist(masterText){
+  // Prefer GROUP-ID chunked / NAME 1080 / highest BANDWIDTH. Return absolute media playlist URL.
+  const lines=masterText.split(/\r?\n/);
+  let best=null, bestBw=-1, pending=null;
+  for(const line of lines){
+    if(line.startsWith('#EXT-X-STREAM-INF:')){
+      const bw=+(line.match(/BANDWIDTH=(\d+)/)||[])[1]||0;
+      const isChunked=/VIDEO="chunked"|RESOLUTION=1920x1080|FRAME-RATE=60/.test(line);
+      pending={bw, isChunked}; continue;
+    }
+    if(pending && line && !line.startsWith('#')){
+      const score=(pending.isChunked?1e12:0)+pending.bw;
+      if(score>bestBw){ bestBw=score; best=line.trim() }
+      pending=null;
+    }
+  }
+  return best;
 }
+function lockHlsToSource(hl){
+  if(!hl||!hl.levels||!hl.levels.length) return;
+  // Highest height, then highest bitrate — never auto level.
+  let idx=0, best=-1;
+  hl.levels.forEach((l,i)=>{ const s=(l.height||0)*1e9+(l.bitrate||0); if(s>=best){best=s;idx=i} });
+  hl.autoLevelEnabled=false;
+  hl.currentLevel=idx; hl.loadLevel=idx; hl.nextLevel=idx; hl.nextLoadLevel=idx;
+}
+const HLS_DEEP={
+  // Buffer far ahead so HD stalls less; trim already-watched data.
+  maxBufferLength: 600,          // aim ~10 min forward
+  maxMaxBufferLength: 900,       // allow up to ~15 min when bandwidth allows
+  maxBufferSize: 700*1000*1000,  // ~700 MB
+  backBufferLength: 30,          // keep only ~30s behind playhead
+  maxBufferHole: 0.5,
+  startLevel: -1,                // set explicitly to source after manifest
+  capLevelToPlayerSize: false,   // do not downswitch for small player
+  abrEwmaDefaultEstimate: 8e6,   // assume fat pipe so we never "need" to drop
+  testBandwidth: false,
+  progressive: true,
+};
 async function loadTw(vid,t0){
   curT0=t0;
-  // Prefer own player when available (Safari native HLS, or hls.js via CORS proxy).
-  const canOwn=NATIVE||!!PROXY;
-  if(canOwn){
-    try{ if(!NATIVE) await ensureHlsJs() }catch(e){ return loadTwEmbed(vid,t0) }
+  // Deep-buffer HD path requires the CORS proxy + hls.js (Twitch embed cannot prefetch minutes ahead).
+  if(proxyOK()){
+    try{ await ensureHlsJs() }catch(e){ return loadTwEmbed(vid,t0) }
     if(!ownOK()) return loadTwEmbed(vid,t0);
     stopOthers('nv');
     NV.style.display=''; A=NA; $('#shield').style.display='';
-    $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (full Twitch stream)`;
-    cover('Loading…'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0); twPending=[vid,start];
-    twHls(vid).then(u=>{ if(HL){try{HL.destroy()}catch(e){} HL=null}
-      if(!NATIVE){
-        HL=new Hls({
-          startPosition:start,
-          capLevelToPlayerSize:true,
-          maxBufferLength:45,
-          maxMaxBufferLength:90,
-          maxBufferSize:60*1000*1000,
-          abrEwmaDefaultEstimate:1800000,
-          startLevel:-1,
-          testBandwidth:true,
-          progressive:true,
-          debug:location.search.includes('hlsdebug'),
-          xhrSetup:(x,url)=>x.open('GET',PROXY+(PROXY.includes('?')?'&':'?')+'u='+encodeURIComponent(url),true)
-        });
-        HL.on(Hls.Events.MANIFEST_PARSED,()=>pickHlsLevel(HL, preferredQuality()));
-        HL.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)$('#msg').textContent='Stream error: '+d.details});
-        HL.loadSource(u); HL.attachMedia(NV);
-        // Do not also seek on loadedmetadata — startPosition already did; a second seek re-buffers.
-        NV.addEventListener('loadedmetadata',()=>{ NV.volume=+$('#vol').value/100; if(A===NA)cover('Tap ▶ to start')},{once:true});
-      } else {
-        NV.src=u;
-        NV.addEventListener('loadedmetadata',()=>{NV.currentTime=start; NV.volume=+$('#vol').value/100; if(A===NA)cover('Tap ▶ to start')},{once:true});
-      }
+    $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (Twitch 1080p) · deep buffer`;
+    cover('Loading HD…'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0); twPending=[vid,start];
+    twMasterUrl(vid).then(async masterUrl=>{
+      if(HL){try{HL.destroy()}catch(e){} HL=null}
+      // Fetch master through proxy, lock onto the source media playlist so ABR cannot drop below HD.
+      let playUrl=masterUrl;
+      try{
+        const masterTxt=await fetch(proxied(masterUrl)).then(r=>{ if(!r.ok) throw new Error('master '+r.status); return r.text() });
+        const src=pickSourcePlaylist(masterTxt);
+        if(src) playUrl=src;
+      }catch(e){ /* fall through to master; still lock level after parse */ }
+      HL=new Hls(Object.assign({}, HLS_DEEP, {
+        startPosition:start,
+        debug:location.search.includes('hlsdebug'),
+        xhrSetup:(x,url)=>x.open('GET', proxied(url), true)
+      }));
+      HL.on(Hls.Events.MANIFEST_PARSED,()=>lockHlsToSource(HL));
+      HL.on(Hls.Events.LEVEL_SWITCHING,()=>lockHlsToSource(HL)); // refuse downswitches
+      HL.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)$('#msg').textContent='Stream error: '+d.details});
+      HL.loadSource(playUrl); HL.attachMedia(NV);
+      NV.addEventListener('loadedmetadata',()=>{ NV.volume=+$('#vol').value/100; if(A===NA)cover('Tap ▶ to start')},{once:true});
     }).catch(e=>{$('#msg').textContent='Own player failed ('+e.message+'), using Twitch embed'; loadTwEmbed(vid,t0)});
-    clearInterval(tick); tick=setInterval(()=>{ if(A!==NA)return; const t=NV.currentTime; $('#time').textContent=fmt(Math.max(0,t-curT0)); if(t>2) LS['p_tw'+vid+'_'+cur.id]=t },500); return }
+    clearInterval(tick); tick=setInterval(()=>{ if(A!==NA)return; const t=NV.currentTime; $('#time').textContent=fmt(Math.max(0,t-curT0)); updateBufLabel(); if(t>2) LS['p_tw'+vid+'_'+cur.id]=t },500); return }
+  // No proxy: Safari can still play native HLS at source (browser-controlled buffer); else Twitch embed fallback.
+  if(NATIVE){
+    stopOthers('nv'); NV.style.display=''; A=NA; $('#shield').style.display='';
+    $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (Twitch 1080p) · native HLS`;
+    cover('Loading HD…'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0); twPending=[vid,start];
+    twMasterUrl(vid).then(u=>{
+      NV.src=u;
+      NV.addEventListener('loadedmetadata',()=>{NV.currentTime=start; NV.volume=+$('#vol').value/100; if(A===NA)cover('Tap ▶ to start')},{once:true});
+    }).catch(e=>{$('#msg').textContent='Own player failed ('+e.message+'), using Twitch embed'; loadTwEmbed(vid,t0)});
+    clearInterval(tick); tick=setInterval(()=>{ if(A!==NA)return; const t=NV.currentTime; $('#time').textContent=fmt(Math.max(0,t-curT0)); updateBufLabel(); if(t>2) LS['p_tw'+vid+'_'+cur.id]=t },500); return }
+  $('#msg').textContent='Deep HD buffer needs the HLS proxy (not configured yet). Falling back to Twitch embed.';
   loadTwEmbed(vid,t0)}
 function loadTwEmbed(vid,t0){
   stopOthers('tw');
   A=TA; $('#tw').style.display='';
-  $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (full Twitch stream)`;
+  $('#info').textContent=`${cur.teams.join(' vs ')} · ${cur.stage} · Source: Caedrel (Twitch embed fallback)`;
   cover('Tap ▶ to start'); const start=Math.floor(+LS['p_tw'+vid+'_'+cur.id]||t0);
   twPending=[vid,start];
   clearInterval(tick); tick=setInterval(()=>{ if(!TP||A!==TA)return; const t=TP.getCurrentTime(); $('#time').textContent=fmt(Math.max(0,t-curT0));
     if(t>2) LS['p_tw'+twPending[0]+'_'+cur.id]=t },500)}
 function applyTwQuality(){
+  // Embed fallback: force source/1080 when the API exposes it.
   if(!TP||!TP.getQualities) return;
-  const want=preferredQuality();
   try{
-    if(want==='auto'){TP.setQuality('auto');return}
     const quals=TP.getQualities()||[];
-    const hit=quals.find(x=>x.group===want)||quals.find(x=>x.name===want)||
-      (want==='chunked'?quals.find(x=>x.group==='chunked'||/1080|source/i.test(x.name||'')):null)||
-      quals.find(x=>qualHeight(want)&&Math.abs((x.height||0)-qualHeight(want))<40);
-    if(hit) TP.setQuality(hit.group||hit.name); else TP.setQuality(want);
+    const hit=quals.find(x=>x.group==='chunked')||quals.find(x=>/1080|source/i.test(x.name||''))||quals[quals.length-1];
+    if(hit) TP.setQuality(hit.group||hit.name);
   }catch(e){}}
 function twFrame(vid,start){ // API-free fallback (e.g. tracking protection blocked embed/v1.js)
   const h=start/3600|0,m=(start%3600)/60|0,x=start%60;
-  const q=preferredQuality();
-  // quality= is best-effort; Twitch may ignore it on the basic iframe.
-  $('#tw').innerHTML=`<iframe src="https://player.twitch.tv/?video=v${vid}&parent=${location.hostname}&time=${h}h${m}m${x}s&autoplay=true&quality=${encodeURIComponent(q==='chunked'?'chunked':q)}" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
-  TP=null; A=null; $('#msg').textContent='Basic Twitch player (page controls unavailable). If it does not start, click the video. Use Twitch’s gear menu for quality if buffering.'}
+  $('#tw').innerHTML=`<iframe src="https://player.twitch.tv/?video=v${vid}&parent=${location.hostname}&time=${h}h${m}m${x}s&autoplay=true&quality=chunked" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+  TP=null; A=null; $('#msg').textContent='Basic Twitch player (page controls unavailable; cannot deep-buffer). If it does not start, click the video.'}
 function makeTw(){try{makeTw2()}catch(e){$('#msg').textContent='Twitch player error: '+e.message+' (using basic player)'; twFrame(...twPending)}}
 function makeTw2(){const [vid,start]=twPending;
   if(!(window.Twitch&&Twitch.Player)) return twFrame(vid,start);
@@ -232,7 +266,7 @@ function st(e){ if(A!==YA)return; if(e.data===1){$('#cover').style.display='none
   else{ $('#pp').textContent='▶'; if(e.data===2) cover('Paused'); if(e.data===0){ended()} } }
 $('#pp').onclick=$('#cover').onclick=()=>{ try{play1()}catch(e){$('#msg').textContent='Error: '+e.message} };
 function play1(){ if(!A&&!TP&&$('#tw iframe')&&srcList[srcIdx][2]==='tw')return; if(!A&&srcList[srcIdx]&&srcList[srcIdx][2]==='tw'){ $('#cover').style.display='none'; return twFrame(...twPending)} if(!A)return; if(A===YA&&!ready){window.wantPlay=1;return}
-  if(A===TA){ if(A.playing()){A.pause();return}  // Twitch refuses to play while covered: uncover first
+  if(A===TA){ if(A.playing()){A.pause();return}
     twUserPause=false; $('#cover').style.display='none'; $('#shield').style.display='none';
     const k=twPending.join();
     const kick=()=>{ if(twLoaded!==k){twLoaded=k;makeTw()} else setTimeout(()=>{applyTwQuality();TP.play()},400);
@@ -244,16 +278,6 @@ document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{if(!A)return;con
 $('#go').onclick=()=>{if(!A)return;const p=$('#jump').value.split(':').map(Number);let s=0;p.forEach(x=>s=s*60+x);A.seek(Math.min(s,(A.dur()||1e9)-4))};
 $('#vol').oninput=e=>A&&A.vol(+e.target.value);
 $('#spd').onchange=e=>A&&A.rate(+e.target.value);
-$('#qual').onchange=e=>{
-  LS['vq']=e.target.value;
-  if(!cur||!srcList[srcIdx]||srcList[srcIdx][2]!=='tw') return;
-  // Re-apply without changing playback position preference: reload current Twitch source.
-  const was=A&&A.playing&&A.playing();
-  const tpos=A&&A.time?A.time():0;
-  if(tpos>2) LS['p_tw'+srcList[srcIdx][1]+'_'+cur.id]=tpos;
-  loadTw(srcList[srcIdx][1], srcList[srcIdx][3]);
-  if(was) setTimeout(()=>{try{$('#pp').click()}catch(err){}}, 600);
-};
 const V=$('#view'), fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
 function toggleFS(){
   if(V.classList.contains('pfs')){V.classList.remove('pfs');document.body.style.overflow='';return}
