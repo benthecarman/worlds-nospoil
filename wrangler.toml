@@ -2,3 +2,4 @@ name = "hls-proxy"
 main = "worker/hls-proxy.js"
 compatibility_date = "2026-11-04"
 workers_dev = true
+account_id = "9931a9dd1f5b8dcf5159008c73394c0b"
