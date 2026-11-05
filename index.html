@@ -123,7 +123,28 @@ function ensureHlsJs(){ if(window.Hls) return Promise.resolve(); if(hlsJsPromise
   hlsJsPromise=new Promise((res,rej)=>{const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js'; s.onload=res; s.onerror=()=>rej(new Error('hls.js load failed')); document.head.appendChild(s)}); return hlsJsPromise}
 function ensureTwJs(){ if(window.Twitch&&Twitch.Player) return Promise.resolve(); if(window.TWJS_FAIL) return Promise.reject(new Error('Twitch embed blocked')); if(twJsPromise) return twJsPromise;
   twJsPromise=new Promise((res,rej)=>{const s=document.createElement('script'); s.src='https://player.twitch.tv/js/embed/v1.js?v=6'; s.onload=()=> (window.Twitch&&Twitch.Player)?res():rej(new Error('Twitch Player missing')); s.onerror=()=>{window.TWJS_FAIL=1;rej(new Error('Twitch embed blocked'))}; document.head.appendChild(s)}); return twJsPromise}
-function proxied(url){ return PROXY+(PROXY.includes('?')?'&':'?')+'u='+encodeURIComponent(url) }
+function proxied(url){
+  if(!PROXY||!url) return url;
+  try{
+    const abs=new URL(url, location.href);
+    // Already a request to our proxy — don't double-wrap.
+    if(abs.href.startsWith(PROXY) || (PROXY.endsWith('/')&&abs.href.startsWith(PROXY.slice(0,-1)+'/?')) || abs.searchParams.has('u')&&abs.hostname.endsWith('workers.dev')&&abs.pathname.replace(/\/$/,'')===new URL(PROXY).pathname.replace(/\/$/,'')){
+      return abs.href;
+    }
+  }catch(e){}
+  return PROXY+(PROXY.includes('?')?'&':'?')+'u='+encodeURIComponent(url)
+}
+function hlsProxyHooks(){
+  return {
+    xhrSetup:(xhr, url)=>{ xhr.open('GET', proxied(url), true) },
+    fetchSetup:(context, init)=>{
+      const u=proxied(context.url||context);
+      // hls.js may pass context object; ensure Request hits the proxy.
+      const hdrs=new Headers((init&&init.headers)||{});
+      return new Request(u, Object.assign({}, init, {headers:hdrs}));
+    }
+  }
+}
 const NA={play:()=>NV.play().catch(e=>$('#msg').textContent='Play failed: '+e.message),pause:()=>NV.pause(),seek:s=>NV.currentTime=s,time:()=>NV.currentTime,dur:()=>NV.duration,playing:()=>!NV.paused,vol:v=>NV.volume=v/100,rate:r=>NV.playbackRate=r};
 NV.onplay=()=>{if(A===NA){$('#cover').style.display='none';$('#pp').textContent='❚❚'}};
 NV.onpause=()=>{if(A===NA){$('#pp').textContent='▶';cover('Paused')}};
@@ -206,15 +227,15 @@ async function loadTw(vid,t0){
         const src=pickSourcePlaylist(masterTxt);
         if(src) playUrl=src;
       }catch(e){ /* fall through to master; still lock level after parse */ }
-      HL=new Hls(Object.assign({}, HLS_DEEP, {
+      HL=new Hls(Object.assign({}, HLS_DEEP, hlsProxyHooks(), {
         startPosition:start,
-        debug:location.search.includes('hlsdebug'),
-        xhrSetup:(x,url)=>x.open('GET', proxied(url), true)
+        debug:location.search.includes('hlsdebug')
       }));
       HL.on(Hls.Events.MANIFEST_PARSED,()=>lockHlsToSource(HL));
       HL.on(Hls.Events.LEVEL_SWITCHING,()=>lockHlsToSource(HL)); // refuse downswitches
       HL.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)$('#msg').textContent='Stream error: '+d.details});
-      HL.loadSource(playUrl); HL.attachMedia(NV);
+      // Always load via proxy — playUrl from the master may be raw CloudFront.
+      HL.loadSource(proxied(playUrl)); HL.attachMedia(NV);
       NV.addEventListener('loadedmetadata',()=>{ NV.volume=+$('#vol').value/100; if(A===NA)cover('Tap ▶ to start')},{once:true});
     }).catch(e=>{$('#msg').textContent='Own player failed ('+e.message+'), using Twitch embed'; loadTwEmbed(vid,t0)});
     clearInterval(tick); tick=setInterval(()=>{ if(A!==NA)return; const t=NV.currentTime; $('#time').textContent=fmt(Math.max(0,t-curT0)); updateBufLabel(); if(t>2) LS['p_tw'+vid+'_'+cur.id]=t },500); return }

@@ -1,6 +1,6 @@
 // Cloudflare Worker: CORS proxy for Twitch VOD HLS (playlists + segments).
-// Only benthecarman.github.io (and local/dev) may use it; only Twitch CDN hosts are fetched.
-const HOST_OK = /(^|\.)(ttvnw\.net|cloudfront\.net|twitchcdn\.net|jtvnw\.net)$/;
+// Playlists are rewritten so every child URI points back through this proxy
+// (hls.js fetch loader otherwise hits CloudFront directly and fails CORS).
 const ORIGIN_OK = /^(https:\/\/benthecarman\.github\.io|http:\/\/127\.0\.0\.1:\d+|http:\/\/localhost:\d+)$/;
 
 function corsHeaders(origin) {
@@ -15,14 +15,46 @@ function corsHeaders(origin) {
   };
 }
 
-function absify(body, base) {
+function hostOk(u) {
+  const h = u.hostname;
+  if (/(^|\.)(ttvnw\.net|twitchcdn\.net|jtvnw\.net|twitch\.tv)$/.test(h)) return true;
+  if (/(^|\.)cloudfront\.net$/.test(h)) {
+    // Twitch VOD/CloudFront objects only — not a general CloudFront open proxy.
+    const p = u.pathname;
+    return /\.(m3u8|ts|m4s|mp4|aac|vtt)(\?|$)/i.test(p)
+      || /index-(dvr|muted)/i.test(p)
+      || /\/storyboards\//i.test(p)
+      || /_[a-z0-9]+_\d+_\d+\//i.test(p);
+  }
+  return false;
+}
+
+function unwrapTarget(href, selfOrigin) {
+  try {
+    const u = new URL(href);
+    if (u.origin === selfOrigin && u.searchParams.has('u')) {
+      return unwrapTarget(u.searchParams.get('u'), selfOrigin);
+    }
+  } catch {}
+  return href;
+}
+
+function proxyWrap(selfOrigin, targetHref) {
+  const abs = unwrapTarget(targetHref, selfOrigin);
+  return `${selfOrigin}/?u=${encodeURIComponent(abs)}`;
+}
+
+function rewritePlaylist(body, base, selfOrigin) {
   return body.split('\n').map(l => {
-    if (!l || l.startsWith('#')) {
+    if (!l) return l;
+    if (l.startsWith('#')) {
       return l.replace(/URI="([^"]+)"/g, (_, u) => {
-        try { return `URI="${new URL(u, base).href}"` } catch { return `URI="${u}"` }
+        try { return `URI="${proxyWrap(selfOrigin, new URL(u, base).href)}"` }
+        catch { return `URI="${u}"` }
       });
     }
-    try { return new URL(l, base).href } catch { return l }
+    try { return proxyWrap(selfOrigin, new URL(l, base).href) }
+    catch { return l }
   }).join('\n');
 }
 
@@ -30,34 +62,44 @@ export default {
   async fetch(req) {
     const origin = req.headers.get('Origin') || '';
     const cors = corsHeaders(origin);
+    const selfOrigin = new URL(req.url).origin;
+
     if (req.method === 'OPTIONS') {
-      // Preflight: require a browser Origin from our allowlist
       if (origin && !ORIGIN_OK.test(origin)) return new Response('origin not allowed', {status: 403, headers: cors});
       return new Response(null, {status: 204, headers: cors});
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return new Response('method not allowed', {status: 405, headers: cors});
     }
-    // Non-browser tools may omit Origin; browser calls from other sites are rejected.
     if (origin && !ORIGIN_OK.test(origin)) {
       return new Response('origin not allowed', {status: 403, headers: cors});
     }
-    const u = new URL(req.url).searchParams.get('u');
-    let t; try { t = new URL(u) } catch { return new Response('bad url', {status: 400, headers: cors}) }
-    if (t.protocol !== 'https:' || !HOST_OK.test(t.hostname)) {
+
+    const raw = new URL(req.url).searchParams.get('u');
+    let t;
+    try { t = new URL(unwrapTarget(raw, selfOrigin)) }
+    catch { return new Response('bad url', {status: 400, headers: cors}) }
+    if (t.protocol !== 'https:' || !hostOk(t)) {
       return new Response('host not allowed', {status: 403, headers: cors});
     }
-    const hdrs = {};
+
+    const hdrs = { Accept: '*/*' };
     const range = req.headers.get('range'); if (range) hdrs['Range'] = range;
-    // Identify as a simple fetch; avoid forwarding client UA that triggers odd CDN paths.
-    hdrs['Accept'] = '*/*';
     const r = await fetch(t.toString(), {headers: hdrs, redirect: 'follow'});
+    // After redirects, re-check the final host.
+    let finalUrl = t;
+    try { finalUrl = new URL(r.url) } catch {}
+    if (finalUrl.protocol !== 'https:' || !hostOk(finalUrl)) {
+      return new Response('redirect host not allowed', {status: 403, headers: cors});
+    }
+
     const h = new Headers();
     for (const [k, v] of Object.entries(cors)) h.set(k, v);
     const ct = r.headers.get('content-type') || '';
-    const isPlaylist = t.pathname.endsWith('.m3u8') || ct.includes('mpegurl') || ct.includes('application/vnd.apple.mpegurl') || ct.includes('application/x-mpegURL');
+    const isPlaylist = finalUrl.pathname.endsWith('.m3u8') || t.pathname.endsWith('.m3u8')
+      || /mpegurl|application\/vnd\.apple\.mpegurl|application\/x-mpegURL/i.test(ct);
     if (isPlaylist) {
-      const body = absify(await r.text(), t);
+      const body = rewritePlaylist(await r.text(), finalUrl, selfOrigin);
       h.set('Content-Type', 'application/vnd.apple.mpegurl');
       h.set('Cache-Control', 'no-cache');
       return new Response(body, {status: r.status, headers: h});
