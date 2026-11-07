@@ -886,7 +886,12 @@
    ],
    "caedrel": [],
    "official": [],
-   "twitch": []
+   "twitch": [
+    {
+     "v": "2921274445",
+     "t": 16592
+    }
+   ]
   },
   {
    "id": "115660540726095127",
@@ -907,7 +912,7 @@
    "stage": "Semifinals",
    "bestOf": 5,
    "teams": [
-    "TBD",
+    "T1",
     "BLG"
    ],
    "caedrel": [],
