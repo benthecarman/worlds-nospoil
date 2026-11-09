@@ -926,7 +926,12 @@
    ],
    "caedrel": [],
    "official": [],
-   "twitch": []
+   "twitch": [
+    {
+     "v": "2923277721",
+     "t": 18008
+    }
+   ]
   },
   {
    "id": "115660540726095133",
@@ -934,8 +939,8 @@
    "stage": "Finals",
    "bestOf": 5,
    "teams": [
-    "TBD",
-    "GEN"
+    "GEN",
+    "BLG"
    ],
    "caedrel": [],
    "official": [],
